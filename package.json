@@ -1,5 +1,17 @@
 {
+  "name": "musicalist",
+  "author": "Kotvič",
+  "description": "Check README.md for all information",
+  "keywords": ["song", "music", "puppeteer", "scraping"],
+
+  "main": "musicalist.js",
+  "type": "module",
+  "version": "beta",
+
   "dependencies": {
     "puppeteer": "^24.10.0"
+  },
+  "scripts": {
+    "sing": "node musicalist.js > output.txt"
   }
 }

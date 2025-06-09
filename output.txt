@@ -1,0 +1,7 @@
+"Never gonna give you up": [
+  'synthpop',
+  'sophisti-pop',
+  'soft rock',
+  'new wave pop',
+  'new romantic'
+]

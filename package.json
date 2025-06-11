@@ -10,7 +10,7 @@
     "electron"
   ],
   "main": "src/index.js",
-  "type": "module",
+  "type": "commonjs",
   "version": "beta",
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",

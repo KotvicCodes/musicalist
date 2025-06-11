@@ -1,18 +1,47 @@
-     {'Never gonna give you up': [
-       'synthpop',
-       'sophisti-pop',
-       'soft rock',
-       'new wave pop',
-       'new romantic'
-     ],
-     'Clever girl': [ 'nerdcore', 'geek rock', 'geek folk' ],
-     'Pretty fly (for a white guy)': [
-       'socal pop punk',
-       'skate punk',
-       'rock',
-       'punk',
-       'post-grunge',
-       'permanent wave',
-       'alternative metal'
-     ]
-   }
+[
+  {
+    song: 'Never gonna give you up',
+    author: 'Rick Astley',
+    album: 'Whenever You Need Somebody',
+    releaseDate: [ 'November 12, 1987' ],
+    spotifyGenres: [
+      'synthpop',
+      'sophisti-pop',
+      'soft rock',
+      'new wave pop',
+      'new romantic'
+    ],
+    wikiGenres: [ 'Pop', 'dance-pop', 'blue-eyed soul' ]
+  },
+  {
+    song: 'Clever girl',
+    author: 'The Doubleclicks',
+    album: 'Chainmail and Cello',
+    releaseDate: [ 'April 30, 2012' ],
+    spotifyGenres: [ 'nerdcore', 'geek rock', 'geek folk' ],
+    wikiGenres: [ 'Nerd-folk', 'Comedy', 'Singer-Songwriter', 'Geek rock' ]
+  },
+  {
+    song: 'Pretty fly (for a white guy)',
+    author: 'The Offspring',
+    album: 'Americana',
+    releaseDate: [ 'November 16, 1998' ],
+    spotifyGenres: [
+      'socal pop punk',
+      'skate punk',
+      'rock',
+      'punk',
+      'post-grunge',
+      'permanent wave',
+      'alternative metal'
+    ],
+    wikiGenres: [
+      'Punk rock',
+      'skate punk',
+      'pop-punk',
+      'melodic hardcore',
+      'alternative rock',
+      'hardcore punk'
+    ]
+  }
+]

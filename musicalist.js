@@ -35,9 +35,10 @@ async function genres(array) {
      await new Promise(resolve => setTimeout(resolve, 4000)) //todo/ replace with waitForSelector
 
      //* Loop through the array of songs
-     let object = {}
+     let ultraArray = []
      for(let i = 0; i < length; i++) {
           let song = array[i]
+          let object = {}
 
           // search for your song
           await page.waitForSelector("#search-word")
@@ -45,16 +46,51 @@ async function genres(array) {
           await page.waitForSelector(".span-class")
           await page.click(".span-class")
 
-          // scrape genres
+          // scrape author
           await page.waitForSelector(".spotify-result")
-          const genres = await page.evaluate(() => {
-               const genreElements = document.querySelectorAll(".spotify-result .pl-tags a")
-               return Array.from(genreElements).map(el => el.textContent.trim())
+          let author = await page.evaluate(() => {
+               const authorEl = document.querySelector(".track-list-item-info-genres .ng-binding")
+               return authorEl ? authorEl.textContent.trim() : null
           })
-          object[song] = genres
+          author = author.replace(/^\s*by:\s+/i, "")
+
+          // scrape album
+          const album = await page.evaluate(() => {
+               const albumEl = document.querySelector(".album-data b")
+               return albumEl ? albumEl.textContent.trim() : null
+          })
+
+          // scrape release date
+          let date = await page.evaluate(() => {
+               const dateEl = document.querySelector(".album-data")
+               return dateEl ? dateEl.textContent.trim() : null
+          })
+          date = date.match(/\(.*?\)/g).map(str => str.replace(/[()]/g, ""))
+
+          // scrape Spotify genres
+          const genresS = await page.evaluate(() => {
+               const genreEls = document.querySelectorAll(".spotify-result .pl-tags a")
+               return Array.from(genreEls).map(el => el.textContent.trim())
+          })
+
+          // scrape Wikipedia genres
+          await page.waitForSelector(".lastfm-taga")
+          const genresW = await page.evaluate(() => {
+               const genreEls = document.querySelectorAll(".lastfm-taga")
+               return Array.from(genreEls).map(el => el.textContent.trim())
+          })
+
+          // save and restart
+          object.song = song
+          object.author = author
+          object.album = album
+          object.releaseDate = date
+          object.spotifyGenres = genresS
+          object.wikiGenres = genresW
+          ultraArray.push(object)
           await page.goto("https://www.chosic.com/music-genre-finder/")
      }
-     console.log(object)
+     console.log(ultraArray)
 
      //* Close down
      await browser.close()

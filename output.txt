@@ -1,7 +1,18 @@
-"Never gonna give you up": [
-  'synthpop',
-  'sophisti-pop',
-  'soft rock',
-  'new wave pop',
-  'new romantic'
-]
+     {'Never gonna give you up': [
+       'synthpop',
+       'sophisti-pop',
+       'soft rock',
+       'new wave pop',
+       'new romantic'
+     ],
+     'Clever girl': [ 'nerdcore', 'geek rock', 'geek folk' ],
+     'Pretty fly (for a white guy)': [
+       'socal pop punk',
+       'skate punk',
+       'rock',
+       'punk',
+       'post-grunge',
+       'permanent wave',
+       'alternative metal'
+     ]
+   }

@@ -6,7 +6,6 @@ It parses data from Spotify using website [Chosic](https://www.chosic.com), and 
 ## Todo list:
 - add license  
 - add UI  
-- add some further functionality  
 - delete translate files from the extension to lesser the size of the app  
 - replace hardcoded timestamp in between cookies & search with waitForSelector statement  
-- make it work in headless mode  
+- make the program work in headless mode  

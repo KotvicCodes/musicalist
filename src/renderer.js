@@ -1,10 +1,5 @@
 //
 
-//! Link HTML
-
-const scrapeQ = document.getElementById("scrapeQ")
-
-
 //! Input
 const songArray = [
      "Never gonna give you up",
@@ -15,7 +10,7 @@ const songArray = [
 
 //! Puppeteer Click
 
-console.log("electronAPI:", window.electronAPI)
+const scrapeQ = document.getElementById("scrapeQ")
 
 scrapeQ.addEventListener('click', async () => {
      console.log("Scraping genres...")

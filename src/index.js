@@ -1,10 +1,18 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron')
+const puppeteering = require('../musicalist.js')
 const path = require('node:path');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit();
 }
+
+// This is the IPC listener
+ipcMain.handle('run-puppeteer', async (event, data) => {
+  // Runs when the renderer sends a 'run-puppeteer' message
+  const result = await puppeteering(data)
+  return result
+})
 
 const createWindow = () => {
   // Create the browser window.
@@ -37,6 +45,7 @@ app.whenReady().then(() => {
     }
   });
 });
+
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

@@ -2,22 +2,13 @@
 
 //! Import
 
-import puppeteer from 'puppeteer'
-import path from 'path'
+const puppeteer = require('puppeteer')
+const path = require('path')
 
 
 //! Input Data
 
-const songArray = [
-     "Never gonna give you up",
-     "Clever girl",
-     "Pretty fly (for a white guy)",
-]
-
-
-//! Puppeteering Genres
-
-async function genres(array) {
+async function puppeteering(array) {
      //* Acess array length
      const length = array.length
 
@@ -95,4 +86,7 @@ async function genres(array) {
      //* Close down
      await browser.close()
 }
-genres(songArray)
+
+//! Export
+
+module.exports = puppeteering

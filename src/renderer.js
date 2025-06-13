@@ -1,22 +1,39 @@
 //
 
-//! Input
-const songArray = [
-     "Never gonna give you up",
-     "Clever girl",
-     "Pretty fly (for a white guy)",
-]
+//! Link HTML
+
+const inputTextareaQ = document.getElementById("inputTextareaQ")
+const scrapeButtonQ = document.getElementById("scrapeButtonQ")
 
 
 //! Puppeteer Click
 
-const scrapeQ = document.getElementById("scrapeQ")
+scrapeButtonQ.addEventListener('click', async () => {
 
-scrapeQ.addEventListener('click', async () => {
-     console.log("Scraping genres...")
+     //* Get the input value
+     const songArray = textToArray(inputTextareaQ.value)
+
      const response = await window.electronAPI.runPuppeteer(songArray)
-   
+
      if(response) {
           console.log('Got title:', response)
      }
 })
+
+
+//! Collect Songs From Textarea
+
+function textToArray(text) {
+     let array = []
+     text = text.trim()
+
+     if(text.length === 0) {
+         return array
+     }
+     const lines = text.split(',')
+     array = lines.map(line => line.trim()).filter(line => line.length > 0)
+     // Remove duplicates
+     array = [...new Set(array)]
+
+     return array
+}

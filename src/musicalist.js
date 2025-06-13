@@ -6,7 +6,7 @@ const puppeteer = require('puppeteer')
 const path = require('path')
 
 
-//! Input Data
+//! Puppeteering Metadata
 
 async function puppeteering(array) {
      //* Acess array length
@@ -86,6 +86,7 @@ async function puppeteering(array) {
      //* Close down
      await browser.close()
 }
+
 
 //! Export
 

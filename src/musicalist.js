@@ -37,8 +37,14 @@ async function puppeteering(array) {
           await page.waitForSelector(".span-class")
           await page.click(".span-class")
 
-          // scrape author
+          // scrape title
           await page.waitForSelector(".spotify-result")
+          let title = await page.evaluate(() => {
+               const titleEl = document.querySelector("div.ng-binding a")
+               return titleEl ? titleEl.textContent.trim() : null
+          })
+
+          // scrape author
           let author = await page.evaluate(() => {
                const authorEl = document.querySelector(".track-list-item-info-genres .ng-binding")
                return authorEl ? authorEl.textContent.trim() : null
@@ -72,7 +78,7 @@ async function puppeteering(array) {
           })
 
           // save and restart
-          object.song = song
+          object.title = title
           object.author = author
           object.album = album
           object.releaseDate = date

@@ -10,16 +10,25 @@
 
      <!--! Main -->
      <main class="main">
-          <h1 class="main__h1">Looking for some tasty data?</h1>
-          <p class="main__p">Please enter your songs separated by commas in the textarea</p>
-          <textarea id="inputTextareaQ" placeholder="Type here!"></textarea>
-          <button id="scrapeButtonQ" class="main__button">Proceed</button>
+
+          <!--* Input -->
+          <div id="inputQ">
+               <h1 class="main__h1">Looking for some tasty data?</h1>
+               <p class="main__p">Please enter your songs separated by commas in the textarea</p>
+               <textarea id="inputTextareaQ" placeholder="Type here!"></textarea>
+               <button id="scrapeButtonQ" class="main__button">Proceed</button>
+          </div>
           <br><br>
-          <label for="initialDelay">Initial delay (required to get through cookies) in ms</label>
-          <input id="initialDelayQ" type="number" name="initialDelay">
-          <br><br>
-          <label for="keyDelay">Delay between key strikes in ms</label>
-          <input id="keyDelayQ" type="number" name="keyDelay">
+
+          <!--* Advanced settings -->
+          <button id="advancedButtonQ">Advanced settings</button><br><br>
+          <div id="advancedQ" class="hidden">
+               <label for="initialDelay">Initial delay (required to get through cookies) in ms</label>
+               <input id="initialDelayQ" type="number" name="initialDelay">
+               <br><br>
+               <label for="keyDelay">Delay between key strikes in ms</label>
+               <input id="keyDelayQ" type="number" name="keyDelay">
+          </div>
      </main>
 </body>
 </html>

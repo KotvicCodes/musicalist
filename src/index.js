@@ -9,8 +9,8 @@ const path = require('node:path')
 
 //! Puppeteer Listener
 
-ipcMain.handle('run-puppeteer', async (event, data) => {
-     const result = await puppeteering(data)
+ipcMain.handle('run-puppeteer', async (event, { data, data2, data3 }) => {
+     const result = await puppeteering(data, data2, data3)
      return result
 })
 

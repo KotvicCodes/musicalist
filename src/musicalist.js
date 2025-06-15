@@ -8,7 +8,7 @@ const path = require('path')
 
 //! Puppeteering Metadata
 
-async function puppeteering(array) {
+async function puppeteering(array, initialTimeout, keyDelay) {
      //* Acess array length
      const length = array.length
 
@@ -23,7 +23,7 @@ async function puppeteering(array) {
 
      //* Open the website
      await page.goto("https://www.chosic.com/music-genre-finder/")
-     await new Promise(resolve => setTimeout(resolve, 4000)) //todo/ replace with waitForSelector
+     await new Promise(resolve => setTimeout(resolve, initialTimeout)) //todo/ replace with waitForSelector
 
      //* Loop through the array of songs
      let ultraArray = []
@@ -33,7 +33,7 @@ async function puppeteering(array) {
 
           // search for your song
           await page.waitForSelector("#search-word")
-          await page.type("#search-word", song, { delay: (Math.random() + 1) * 30 })
+          await page.type("#search-word", song, {delay: (Math.random() + 1) * keyDelay})
           await page.waitForSelector(".span-class")
           await page.click(".span-class")
 

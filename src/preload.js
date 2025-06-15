@@ -4,5 +4,5 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
-     runPuppeteer: (data) => ipcRenderer.invoke('run-puppeteer', data)
+     runPuppeteer: (data, data2, data3) => ipcRenderer.invoke('run-puppeteer', { data, data2, data3 })
 })

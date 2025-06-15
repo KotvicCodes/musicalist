@@ -1,19 +1,38 @@
 //
 
-//! Link HTML
+//! Render HTML
 
-const inputTextareaQ = document.getElementById("inputTextareaQ")
-const scrapeButtonQ = document.getElementById("scrapeButtonQ")
+const initialDelayQ = document.getElementById("initialDelayQ")
+const keyDelayQ = document.getElementById("keyDelayQ")
+
+initialDelayQ.value = 2750
+keyDelayQ.value = 20
+
+
+//! Delay Settings
+
+let keyDelay = parseInt(keyDelayQ.value, 10)
+let initialDelay = parseInt(initialDelayQ.value, 10)
+
+initialDelayQ.addEventListener('input', () => {
+     initialDelay = parseInt(initialDelayQ.value, 10)
+})
+
+keyDelayQ.addEventListener('input', () => {
+     keyDelay = parseInt(keyDelayQ.value, 10)
+})
 
 
 //! Puppeteer Click
+
+const inputTextareaQ = document.getElementById("inputTextareaQ")
+const scrapeButtonQ = document.getElementById("scrapeButtonQ")
 
 scrapeButtonQ.addEventListener('click', async () => {
 
      //* Get the input value
      const songArray = textToArray(inputTextareaQ.value)
-
-     const response = await window.electronAPI.runPuppeteer(songArray)
+     const response = await window.electronAPI.runPuppeteer(songArray, initialDelay, keyDelay)
 
      if(response) {
           console.log('Got title:', response)

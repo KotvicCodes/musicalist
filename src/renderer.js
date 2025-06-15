@@ -1,6 +1,8 @@
 //
 
-//! Render HTML
+//! Advanced Settings
+
+//* Page render
 
 const initialDelayQ = document.getElementById("initialDelayQ")
 const keyDelayQ = document.getElementById("keyDelayQ")
@@ -8,11 +10,11 @@ const keyDelayQ = document.getElementById("keyDelayQ")
 initialDelayQ.value = 2750
 keyDelayQ.value = 20
 
-
-//! Delay Settings
-
 let keyDelay = parseInt(keyDelayQ.value, 10)
 let initialDelay = parseInt(initialDelayQ.value, 10)
+
+
+//* Updating values
 
 initialDelayQ.addEventListener('input', () => {
      initialDelay = parseInt(initialDelayQ.value, 10)
@@ -20,6 +22,16 @@ initialDelayQ.addEventListener('input', () => {
 
 keyDelayQ.addEventListener('input', () => {
      keyDelay = parseInt(keyDelayQ.value, 10)
+})
+
+
+//* Open settings
+
+const advancedQ = document.getElementById("advancedQ")
+const advancedButtonQ = document.getElementById("advancedButtonQ")
+
+advancedButtonQ.addEventListener('click', () => {
+     advancedQ.classList.toggle("hidden")
 })
 
 

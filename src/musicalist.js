@@ -87,10 +87,10 @@ async function puppeteering(array, initialTimeout, keyDelay) {
           ultraArray.push(object)
           await page.goto("https://www.chosic.com/music-genre-finder/")
      }
-     console.log(ultraArray)
 
      //* Close down
      await browser.close()
+     return ultraArray
 }
 
 

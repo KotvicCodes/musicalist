@@ -39,6 +39,7 @@ advancedButtonQ.addEventListener('click', () => {
 
 const inputTextareaQ = document.getElementById("inputTextareaQ")
 const scrapeButtonQ = document.getElementById("scrapeButtonQ")
+const outputQ = document.getElementById("outputQ")
 
 scrapeButtonQ.addEventListener('click', async () => {
 
@@ -46,9 +47,16 @@ scrapeButtonQ.addEventListener('click', async () => {
      const songArray = textToArray(inputTextareaQ.value)
      const response = await window.electronAPI.runPuppeteer(songArray, initialDelay, keyDelay)
 
-     if(response) {
-          console.log('Got title:', response)
-     }
+     //* Display the results
+     outputQ.innerHTML += response.map(song => {
+          return `<div class="song"><p>Title: ${song.title}</p> 
+                    <p>Author: ${song.author}</p>
+                    <p>Album: ${song.album}</p>
+                    <p>Release Date: ${song.releaseDate}</p>
+                    <p>Spotify Genres: ${song.spotifyGenres.join(", ")}</p>
+                    <p>Wikipedia Genres: ${song.wikiGenres.join(", ")}</p>
+               </div>`     
+     }).join("")
 })
 
 

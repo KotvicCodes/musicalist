@@ -7,14 +7,6 @@ const puppeteering = require('./musicalist.js')
 const path = require('node:path')
 
 
-//! Puppeteer Listener
-
-ipcMain.handle('run-puppeteer', async (event, { data, data2, data3 }) => {
-     const result = await puppeteering(data, data2, data3)
-     return result
-})
-
-
 //! Logic
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -24,7 +16,7 @@ if(require('electron-squirrel-startup')) {
 
 // Create the browser window.
 const createWindow = () => {
-     const mainWindow = new BrowserWindow({
+     const win = new BrowserWindow({
           width: 800,
           height: 600,
           webPreferences: {
@@ -32,10 +24,10 @@ const createWindow = () => {
           },
      })
      // and load the index.html of the app.
-     mainWindow.loadFile(path.join(__dirname, 'index.html'))
+     win.loadFile(path.join(__dirname, 'index.html'))
 
      // Open the DevTools.
-     mainWindow.webContents.openDevTools()
+     win.webContents.openDevTools()
 }
 
 // This method will be called when Electron has finished initialization and is ready to
@@ -58,4 +50,12 @@ app.on('window-all-closed', () => {
      if(process.platform !== 'darwin') {
           app.quit()
      }
+})
+
+
+//! Puppeteer Listener
+
+ipcMain.handle('run-puppeteer', async (event, { data, data2, data3 }) => {
+     const result = await puppeteering(data, data2, data3)
+     return result
 })

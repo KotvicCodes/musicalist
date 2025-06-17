@@ -71,7 +71,7 @@ function textToArray(text) {
      }
      const lines = text.split(',')
      array = lines.map(line => line.trim()).filter(line => line.length > 0)
-     // Remove duplicates
+     // remove duplicates
      array = [...new Set(array)]
 
      return array

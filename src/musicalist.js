@@ -9,7 +9,6 @@ const path = require('path')
 //! Puppeteering Metadata
 
 async function puppeteering(array, initialTimeout, keyDelay) {
-     //* Acess array length
      const length = array.length
 
      //* Start the browser with extension

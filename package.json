@@ -13,6 +13,7 @@
   "version": "beta",
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
+    "prettier": "^3.6.2",
     "puppeteer": "^24.10.0"
   },
   "directories": {
@@ -37,5 +38,12 @@
     "@electron/fuses": "^1.8.0",
     "electron": "36.4.0",
     "electron-builder": "^26.0.12"
+  },
+    "prettier": {
+     "semi": false,
+     "singleQuote": true,
+     "tabWidth": 5,
+     "printWidth": 105,
+     "trailingComma": "none"
   }
 }

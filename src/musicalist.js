@@ -96,12 +96,14 @@ async function scrapeSong(page, song, keyDelay) {
 
 //! Puppeteering Metadata
 async function puppeteering(array, initialTimeout, keyDelay, options = {}) {
-     const { headless = false, onProgress } = options
+     const { onProgress } = options
 
      //* Start the browser with extension
+     // Headful only: chosic.com sits behind Cloudflare bot protection, which answers
+     // headless Chrome with a 403 challenge page, so the search field never renders.
      const extensionPath = path.resolve('no-cookies')
      const browser = await puppeteer.launch({
-          headless,
+          headless: false,
           args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
           ignoreDefaultArgs: ['--disable-extensions']
      })

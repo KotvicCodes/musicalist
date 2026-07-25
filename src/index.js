@@ -52,9 +52,8 @@ ipcMain.handle('open-external', async (event, url) => {
 })
 
 //! Puppeteer Listener
-ipcMain.handle('run-puppeteer', async (event, { songs, initialDelay, keyDelay, headless }) => {
+ipcMain.handle('run-puppeteer', async (event, { songs, initialDelay, keyDelay }) => {
      const result = await puppeteering(songs, initialDelay, keyDelay, {
-          headless,
           // stream each scraped song back to the renderer as it is finished
           onProgress: (song) => {
                if (!event.sender.isDestroyed()) {

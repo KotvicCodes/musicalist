@@ -5,19 +5,19 @@
   "keywords": [
     "song",
     "music",
-    "puppeteer",
-    "scraping",
+    "metadata",
+    "spotify",
+    "musicbrainz",
     "electron"
   ],
   "main": "src/index.js",
   "version": "beta",
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
-    "prettier": "^3.6.2",
-    "puppeteer": "^24.10.0"
+    "prettier": "^3.6.2"
   },
   "scripts": {
-    "sing": "node musicalist.js > output.txt",
+    "test": "node --test test/",
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
@@ -35,11 +35,11 @@
     "@electron/fuses": "^1.8.0",
     "electron": "36.4.0"
   },
-    "prettier": {
-     "semi": false,
-     "singleQuote": true,
-     "tabWidth": 5,
-     "printWidth": 105,
-     "trailingComma": "none"
+  "prettier": {
+    "semi": false,
+    "singleQuote": true,
+    "tabWidth": 5,
+    "printWidth": 105,
+    "trailingComma": "none"
   }
 }

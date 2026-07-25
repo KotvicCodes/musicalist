@@ -4,8 +4,8 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
-     runPuppeteer: (songs, initialDelay, keyDelay, headless) =>
-          ipcRenderer.invoke('run-puppeteer', { songs, initialDelay, keyDelay, headless }),
+     runPuppeteer: (songs, initialDelay, keyDelay) =>
+          ipcRenderer.invoke('run-puppeteer', { songs, initialDelay, keyDelay }),
      // subscribe to per-song streaming updates; returns an unsubscribe function
      onProgress: (callback) => {
           const listener = (_event, song) => callback(song)

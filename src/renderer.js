@@ -8,7 +8,6 @@ const REPO_URL = 'https://github.com/KotvicCodes/musicalist#readme'
 //* Page render
 const initialDelayQ = document.getElementById('initialDelayQ')
 const keyDelayQ = document.getElementById('keyDelayQ')
-const headlessQ = document.getElementById('headlessQ')
 
 initialDelayQ.value = 2750
 keyDelayQ.value = 20
@@ -65,7 +64,7 @@ scrapeButtonQ.addEventListener('click', async () => {
      statusQ.textContent = `Scraping ${songArray.length} song${songArray.length === 1 ? '' : 's'}…`
 
      try {
-          await window.electronAPI.runPuppeteer(songArray, initialDelay, keyDelay, headlessQ.checked)
+          await window.electronAPI.runPuppeteer(songArray, initialDelay, keyDelay)
           statusQ.textContent = 'Done.'
      } catch (err) {
           statusQ.textContent = `Something went wrong: ${err.message}`

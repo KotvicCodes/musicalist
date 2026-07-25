@@ -1,21 +1,82 @@
 # Musicalist
-Beware Musicalist app is still in active development, and there's no official `1.0.0` package released yet; however, if you'd like to use it, feel free. It mostly works.
 
-This app aims to help you get metadata (including artists, album name, release date, genres from Spotify and Wikipedia alike) about songs you provide. It might provide you with more data in the future.
-  
-It parses data from Spotify using website [Chosic](https://www.chosic.com), and gets through the cookie policies with [I still don't care about Cookies](https://github.com/OhMyGuus/I-Still-Dont-Care-About-Cookies?tab=GPL-3.0-1-ov-file#readme) browser extension. The UI of the app is made with [Electron](https://www.electronjs.org).
-  
-This project's packages honor the [Semantic Versioning protocol](https://semver.org) or will do so when they are released.
+Musicalist takes a list of songs and gives you back structured metadata for every one of them: artists, album, release date, genres, length, and more. It then summarises the whole list, so you can see what a collection actually looks like rather than reading it song by song.
 
-## User Manual
-### For most users:
-The most important part for most users is the text area. Write all songs you want the metadata of and separate them with commas. I recommend also separating them with line breaks for readability. Once you're set, click the "Proceed" button to start the script and wait for the results.
+Data comes from two places. [Spotify's Web API](https://developer.spotify.com/documentation/web-api) identifies each track and supplies the catalogue facts. [MusicBrainz](https://musicbrainz.org) supplies genres, the original release date, and the release typing. The app is built with [Electron](https://www.electronjs.org).
 
-### Advanced:
-You may have also noticed that there are two more inputs down below, named **Initial delay** and **Key delay**.
+This project follows [Semantic Versioning](https://semver.org).
 
-#### Initial delay
-It is for setting up the delay before searching for the first song. You might ask, why is there a delay in the first place. It is there in order to give the extension enough time to close cookies. It was tested to work with the preset values, but you can test different values, for example if the app crashes a lot on your computer increase the value, or try decreasing it to as low a number as possible before the app stops working if you give it a lot of queries (You aren't likely to save more than a couple hundred milliseconds as I set the number pretty low already).
+## Setup
 
-#### Key delay
-This is a value representing the delay between key strokes when searching for the songs on the page. The value represents the average cooldown between two key strokes, not the exact value as the delay is randomized for lowering suspicion. Lower only at your own risk, as some websites ban IP addresses with a lot of suspicious traffic (anti-bots). Lowering the value may notify their radars, but it hasn't been proven there's something on the website. If you are concerned about this, try increasing this value. Although there wasn't much testing done, I believe you should get away with this one, however.
+Musicalist talks to Spotify with your own API credentials, so nothing is shared between users and your lookups count against your own quota. Getting them takes about two minutes:
+
+1. Sign in at the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
+2. Create an app. Any name and description will do. When it asks for a redirect URI, enter anything valid, for example `http://localhost:3000`; Musicalist never uses it.
+3. Open the app's settings and copy the **Client ID** and **Client Secret**.
+4. In Musicalist, open **Advanced settings**, paste both in, and click **Save**.
+
+The credentials are encrypted with your operating system's keychain and stored on your machine only. They are never sent anywhere except to Spotify's own token endpoint. If your keychain is unavailable, Musicalist says so and keeps them in memory for that session instead of writing them out in the clear.
+
+Developers can set `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` in the environment instead; those take precedence over anything saved in the app.
+
+## Using it
+
+Type or paste your songs into the text area, separated by commas. Line breaks are ignored, so putting one song per line is fine and easier to read. Click **Proceed**.
+
+Results stream in one at a time as they are found. A song Spotify cannot find still gets a row, so the output always lines up with what you asked for.
+
+### Market
+
+Under Advanced settings, **Market** picks which country's catalogue to search. It changes which release of a song you get back, which in turn affects the album and the Spotify release date. Leave it on Any if you do not care.
+
+### Summary
+
+Once results start arriving, a summary strip appears above them covering the whole list: how many songs were found, the decade spread and the busiest one, average and median length, the most common genres, the release type mix, distinct artist count, the explicit ratio, and reissue drift.
+
+Reissue drift is worth explaining. Spotify serves whichever release of a song it happens to carry, which for older music is usually a remaster. A 1975 track routinely reports a 2011 release date. MusicBrainz knows the original date, so Musicalist shows both and tells you how far off Spotify is across the list.
+
+### Export
+
+**Export JSON** writes every field of every song plus the summary, in one self-contained file. **Export CSV** writes one row per song with lists flattened into single cells, ready for a spreadsheet. The CSV carries a UTF-8 byte order mark so Excel reads accented names correctly.
+
+## What you get per song
+
+| Field | Source |
+| --- | --- |
+| Title, artists, album, album type, total tracks | Spotify |
+| Release date and its precision | Spotify |
+| Duration, explicit flag, track and disc number | Spotify |
+| ISRC, Spotify URL, cover art | Spotify |
+| Artist genres | Spotify (see limitations) |
+| Genres, with community vote weights | MusicBrainz |
+| Tags | MusicBrainz |
+| Original release date | MusicBrainz |
+| Release type and secondary types (Live, Compilation, Soundtrack, Remix) | MusicBrainz |
+| Recording ID | MusicBrainz |
+
+## Limitations
+
+**No audio features.** Tempo, energy, danceability, valence, and key are not available. Spotify [deprecated](https://developer.spotify.com/documentation/web-api/reference/get-audio-features) those endpoints and restricted them to apps registered before November 2024, so a newly created app cannot reach them at all. There is no BPM or mood analysis in Musicalist and there cannot be one.
+
+**Spotify genres are fading.** The artist `genres` field is marked deprecated in Spotify's own reference and increasingly comes back empty. That is exactly why MusicBrainz carries the genre load here. Spotify genres are still shown when present, but treat them as a bonus.
+
+**Speed is set by MusicBrainz.** MusicBrainz allows one request per second per application and blocks addresses that exceed it, so Musicalist spaces its calls deliberately. Expect roughly two to three seconds per song, meaning a hundred-song list takes a few minutes. This is still far faster than the browser scraping Musicalist used before 1.0.0, and it needs no visible window.
+
+**Matching is best-effort.** Songs are matched to MusicBrainz by ISRC where Spotify provides one, which is exact. Where it does not, Musicalist falls back to a text search and picks the most original-looking recording, which is usually right but not guaranteed.
+
+## Development
+
+```bash
+npm install
+npm start
+```
+
+```bash
+npm test
+```
+
+Tests run on Node's built-in test runner with no extra dependencies. Network calls are stubbed, so the suite needs no credentials and no connection.
+
+## Credits
+
+Metadata comes from [Spotify](https://developer.spotify.com/documentation/web-api) and [MusicBrainz](https://musicbrainz.org), the latter licensed under [CC0 and CC BY-NC-SA](https://musicbrainz.org/doc/About/Data_License). Musicalist is not affiliated with or endorsed by either.

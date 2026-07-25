@@ -204,6 +204,66 @@ body {
      margin-top: 0.9rem;
 }
 
+.link {
+     color: var(--accent);
+}
+
+/*! Summary */
+
+.summary__head {
+     display: flex;
+     align-items: center;
+     justify-content: space-between;
+     flex-wrap: wrap;
+     gap: 0.75rem;
+}
+
+.summary__title {
+     margin: 0;
+     font-size: 1rem;
+}
+
+.summary__actions {
+     display: flex;
+     align-items: center;
+     gap: 0.5rem;
+}
+
+/* Auto-fitting so the strip stays dense with two stats or with eight. */
+.summary__stats {
+     display: grid;
+     grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+     gap: 0.75rem;
+     margin-top: 0.9rem;
+}
+
+.stat {
+     display: flex;
+     flex-direction: column;
+     gap: 0.1rem;
+     background: var(--surface-muted);
+     border: 1px solid var(--border);
+     border-radius: 8px;
+     padding: 0.6rem 0.75rem;
+}
+
+.stat__label {
+     color: var(--text-muted);
+     font-size: 0.75rem;
+     text-transform: uppercase;
+     letter-spacing: 0.03em;
+}
+
+.stat__value {
+     font-size: 1.15rem;
+     font-weight: 600;
+}
+
+.stat__detail {
+     color: var(--text-muted);
+     font-size: 0.8rem;
+}
+
 /*! Output */
 
 .output {
@@ -240,4 +300,23 @@ body {
 .song__meta dd {
      margin: 0;
      word-break: break-word;
+}
+
+.song--missed {
+     border-style: dashed;
+}
+
+.song--missed .song__title {
+     color: var(--text-muted);
+     margin-bottom: 0.2rem;
+}
+
+.song__note {
+     margin: 0;
+     color: var(--text-muted);
+     font-size: 0.9rem;
+}
+
+.song__aside {
+     color: var(--text-muted);
 }

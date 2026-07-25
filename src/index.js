@@ -1,7 +1,7 @@
 //
 
 //! Import
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, shell } = require('electron')
 const puppeteering = require('./musicalist.js')
 const path = require('node:path')
 
@@ -43,8 +43,24 @@ app.on('window-all-closed', () => {
      }
 })
 
+//! Open External Links
+// Only allow http(s) so a stray value can never launch arbitrary schemes.
+ipcMain.handle('open-external', async (event, url) => {
+     if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
+          await shell.openExternal(url)
+     }
+})
+
 //! Puppeteer Listener
-ipcMain.handle('run-puppeteer', async (event, { data, data2, data3 }) => {
-     const result = await puppeteering(data, data2, data3)
+ipcMain.handle('run-puppeteer', async (event, { songs, initialDelay, keyDelay, headless }) => {
+     const result = await puppeteering(songs, initialDelay, keyDelay, {
+          headless,
+          // stream each scraped song back to the renderer as it is finished
+          onProgress: (song) => {
+               if (!event.sender.isDestroyed()) {
+                    event.sender.send('puppeteer-progress', song)
+               }
+          }
+     })
      return result
 })

@@ -4,5 +4,14 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
-     runPuppeteer: (data, data2, data3) => ipcRenderer.invoke('run-puppeteer', { data, data2, data3 })
+     runPuppeteer: (songs, initialDelay, keyDelay, headless) =>
+          ipcRenderer.invoke('run-puppeteer', { songs, initialDelay, keyDelay, headless }),
+     // subscribe to per-song streaming updates; returns an unsubscribe function
+     onProgress: (callback) => {
+          const listener = (_event, song) => callback(song)
+          ipcRenderer.on('puppeteer-progress', listener)
+          return () => ipcRenderer.removeListener('puppeteer-progress', listener)
+     },
+     // open a link in the user's default browser
+     openExternal: (url) => ipcRenderer.invoke('open-external', url)
 })

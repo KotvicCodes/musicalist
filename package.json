@@ -11,7 +11,7 @@
     "electron"
   ],
   "main": "src/index.js",
-  "version": "beta",
+  "version": "1.0.0",
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
     "prettier": "^3.6.2"

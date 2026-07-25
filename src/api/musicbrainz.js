@@ -178,7 +178,9 @@ function pickRecording(recordings) {
      const tied = recordings.filter((entry) => (entry.score || 0) === best)
 
      const scored = tied.map((entry) => {
-          const groups = (entry.releases || []).map((release) => release['release-group']).filter(Boolean)
+          const groups = (entry.releases || [])
+               .map((release) => release['release-group'])
+               .filter(Boolean)
           return {
                entry,
                // an original pressing exists among this recording's releases
@@ -217,4 +219,11 @@ async function enrich({ isrc, title, artist }) {
 }
 
 //! Export
-module.exports = { enrich, extractRecording, canonicalReleaseGroup, pickRecording, escapeQuery, rankNamed }
+module.exports = {
+     enrich,
+     extractRecording,
+     canonicalReleaseGroup,
+     pickRecording,
+     escapeQuery,
+     rankNamed
+}

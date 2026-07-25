@@ -2,6 +2,17 @@
 <html lang="en">
      <head>
           <meta charset="UTF-8" />
+          <!--
+               Result cards are built as HTML from Spotify and MusicBrainz data, and
+               MusicBrainz genres and tags are community editable. Every value is run
+               through escapeHtml first, so this is the backstop for the day someone
+               adds a field and forgets: nothing outside this folder can ever load or
+               run, so a missed escape cannot become remote code execution.
+          -->
+          <meta
+               http-equiv="Content-Security-Policy"
+               content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+          />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
           <title>Musicalist</title>
           <link rel="stylesheet" href="index.css" />

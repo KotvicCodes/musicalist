@@ -306,6 +306,19 @@ test('falls back to a text search when the ISRC is unknown', async (t) => {
      assert.match(fetch.calls[1].url, /artist%3A/)
 })
 
+test('identifies itself to MusicBrainz with the current version', async (t) => {
+     // MusicBrainz requires a descriptive User-Agent and blocks anonymous traffic,
+     // so this header is not optional and must not go stale across releases.
+     const fetch = stubFetch(() => response({ recordings: [] }))
+     t.after(fetch.restore)
+
+     await enrich({ isrc: 'GBUM71029604', title: 'Bohemian Rhapsody', artist: 'Queen' })
+
+     const sent = fetch.calls[0].options.headers['User-Agent']
+     assert.match(sent, /^Musicalist\/\d+\.\d+\.\d+ \( https:\/\/github\.com\//)
+     assert.ok(sent.includes(require('../package.json').version))
+})
+
 test('spaces requests at least a second apart', async (t) => {
      const fetch = stubFetch((url) => {
           if (url.includes('/isrc/')) return response({ recordings: [{ id: 'rec-1' }] })

@@ -5,7 +5,10 @@ const API_BASE = 'https://musicbrainz.org/ws/2'
 
 // MusicBrainz asks for a descriptive User-Agent and blocks IPs that exceed one
 // request per second. The extra 100 ms is deliberate headroom, not a guess.
-const USER_AGENT = 'Musicalist/1.0.0 ( https://github.com/KotvicCodes/Musicalist )'
+// The version is read rather than written out so it cannot drift out of date
+// and start misreporting which build is calling.
+const { version } = require('../../package.json')
+const USER_AGENT = `Musicalist/${version} ( https://github.com/KotvicCodes/Musicalist )`
 const MIN_GAP_MS = 1100
 
 // A recording lookup with these includes returns genres, tags and the parent

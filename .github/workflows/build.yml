@@ -36,7 +36,7 @@ jobs:
 
           steps:
                - name: Check out
-                 uses: actions/checkout@v4
+                 uses: actions/checkout@v7
                  with:
                       # A manual run builds whatever tag was typed in; a tag push
                       # builds itself.
@@ -53,10 +53,13 @@ jobs:
                       echo "commit:     $(git rev-parse --short HEAD)"
                       node -e 'const p=require("./package.json"); console.log("version:   ", p.version); console.log("license:   ", p.license ?? "MISSING (the rpm build will fail)")'
 
+               # Electron 36 bundles Node 22, so the tests run on the same runtime
+               # that will actually execute this code in the packaged app. Node 20
+               # also reached end of life in April 2026.
                - name: Set up Node
-                 uses: actions/setup-node@v4
+                 uses: actions/setup-node@v7
                  with:
-                      node-version: 20
+                      node-version: 22
                       cache: npm
 
                # The deb and rpm makers shell out to these; they are not on the
@@ -76,7 +79,7 @@ jobs:
                  run: npm run make
 
                - name: Upload packages
-                 uses: actions/upload-artifact@v4
+                 uses: actions/upload-artifact@v7
                  with:
                       name: ${{ matrix.os }}
                       path: out/make/**/*
@@ -88,7 +91,7 @@ jobs:
           runs-on: ubuntu-latest
           steps:
                - name: Download every platform's packages
-                 uses: actions/download-artifact@v4
+                 uses: actions/download-artifact@v8
                  with:
                       path: packages
 

@@ -18,7 +18,20 @@ module.exports = {
           // validation off, which skips the keychain lookup that has nothing to find.
           osxSign: {
                identity: '-',
-               identityValidation: false
+               identityValidation: false,
+               // osx-sign turns on the hardened runtime by default, which turns on
+               // library validation, which refuses to load any library whose Team ID
+               // differs from the main binary's. Ad-hoc signatures carry no Team ID at
+               // all, so the app cannot load its own Electron Framework and dies at
+               // launch before any code runs. The hardened runtime is only worth having
+               // as a prerequisite for notarisation, which needs a paid certificate, so
+               // it costs nothing to drop here. hardenedRuntime is reachable only
+               // per file; a top level key of the same name is silently ignored.
+               optionsForFile: () => ({ hardenedRuntime: false }),
+               // Packager defaults this to true, which downgrades a failed signature to
+               // a warning buried in the build log and lets a broken app reach a
+               // release. A build that cannot sign should stop.
+               continueOnError: false
           }
      },
      rebuildConfig: {},

@@ -13,8 +13,11 @@ module.exports = {
       config: {},
     },
     {
+      // Also built for Windows and Linux so there is a portable option on every
+      // platform, for anyone who would rather not run an installer or who is not
+      // on a deb or rpm distribution.
       name: '@electron-forge/maker-zip',
-      platforms: ['darwin'],
+      platforms: ['darwin', 'win32', 'linux'],
     },
     {
       name: '@electron-forge/maker-deb',

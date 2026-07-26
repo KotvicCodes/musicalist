@@ -17,7 +17,7 @@
     "electron-squirrel-startup": "^1.0.1"
   },
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test",
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",

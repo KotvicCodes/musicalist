@@ -40,9 +40,9 @@ Then follow the setup below, which every platform needs.
 
 Musicalist talks to Spotify with your own API credentials, so nothing is shared between users and your lookups count against your own quota. Getting them takes about two minutes:
 
-1. Sign in at the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
-2. Create an app. Any name and description will do. When it asks for a redirect URI, enter anything valid, for example `http://localhost:3000`; Musicalist never uses it.
-3. Open the app's settings and copy the **Client ID** and **Client Secret**.
+1. Sign in at the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) with your ordinary Spotify account. There is no separate developer account to register for.
+2. Create an app. Any name and description will do. When it asks for a redirect URI, enter `http://127.0.0.1:3000`. Musicalist never uses it, but Spotify will not accept the app without one, and it rejects `localhost` by name, so the loopback address has to be written out in full.
+3. Open the app, then **Settings**. The **Client ID** is shown on the page; the secret is behind the **View client secret** link underneath it. Both can be reopened later, and the secret can be rotated if it ever leaks, so there is nothing to lose here.
 4. In Musicalist, open **Advanced settings**, paste both in, and click **Save**.
 
 The credentials are encrypted with your operating system's keychain and stored on your machine only. They are never sent anywhere except to Spotify's own token endpoint. If your keychain is unavailable, Musicalist says so and keeps them in memory for that session instead of writing them out in the clear.

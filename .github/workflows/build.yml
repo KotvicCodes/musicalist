@@ -92,6 +92,39 @@ jobs:
                - name: Build
                  run: npm run make
 
+               # A bundle can package, sign and verify cleanly and still be unable
+               # to start. 1.0.2 shipped a valid signature whose hardened runtime
+               # switched on library validation, which then refused to load the app's
+               # own Electron Framework because an ad-hoc signature carries no Team ID
+               # to match against. Every static check passed; the app died in dyld
+               # before any of its code ran. Only starting it catches that.
+               #
+               # dyld resolves and validates every linked library before main(), so a
+               # failure of this kind lands within the first second and needs no
+               # window server. Ten seconds is well past that and still cheap.
+               - name: Check the built app starts
+                 if: runner.os == 'macOS'
+                 shell: bash
+                 run: |
+                      set -uo pipefail
+                      APP=out/musicalist-darwin-arm64/musicalist.app/Contents/MacOS/musicalist
+
+                      "$APP" >launch.log 2>&1 &
+                      PID=$!
+                      sleep 10
+
+                      if kill -0 "$PID" 2>/dev/null; then
+                           kill "$PID" 2>/dev/null || true
+                           wait "$PID" 2>/dev/null || true
+                           echo "the app was still running after 10s"
+                           exit 0
+                      fi
+
+                      wait "$PID" || STATUS=$?
+                      echo "::error::The packaged app exited on its own with status ${STATUS:-0} rather than staying up. It builds and signs, but it cannot run. Its output follows."
+                      cat launch.log
+                      exit 1
+
                - name: Upload packages
                  uses: actions/upload-artifact@v7
                  with:
@@ -102,6 +135,11 @@ jobs:
      release:
           name: Attach to release
           needs: build
+          # Without this, a manual run of a branch falls through to the release step
+          # with TAG set to the branch name, and publishes a release called main. A
+          # branch build should produce artifacts to download and nothing else, which
+          # is also what makes it safe to use a manual run to test this workflow.
+          if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
           runs-on: ubuntu-latest
           steps:
                - name: Download every platform's packages

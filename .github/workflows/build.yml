@@ -10,7 +10,7 @@ on:
      workflow_dispatch:
           inputs:
                tag:
-                    description: 'Existing tag to build and attach to, for example v1.0.0'
+                    description: 'Tag to rebuild, which must already exist. Leave blank to build this branch. Pushing a new tag runs this automatically.'
                     required: false
                     type: string
 
@@ -35,6 +35,20 @@ jobs:
                            label: Linux (deb and rpm)
 
           steps:
+               # Checking out a tag that does not exist fails inside git with a
+               # bare exit code 1, after three slow retries, and says nothing about
+               # the cause. Catch it first and say what is actually wrong.
+               - name: Check the tag exists
+                 if: inputs.tag != ''
+                 shell: bash
+                 run: |
+                      if ! git ls-remote --tags --exit-code \
+                           "https://github.com/${{ github.repository }}" \
+                           "refs/tags/${{ inputs.tag }}" >/dev/null 2>&1; then
+                           echo "::error::Tag ${{ inputs.tag }} does not exist. Create and push it first: git tag -a ${{ inputs.tag }} -m 'Musicalist ${{ inputs.tag }}' && git push origin ${{ inputs.tag }}. Pushing a tag starts this workflow on its own, so there is no need to run it by hand."
+                           exit 1
+                      fi
+
                - name: Check out
                  uses: actions/checkout@v7
                  with:

@@ -4,7 +4,15 @@ Musicalist takes a list of songs and gives you back structured metadata for ever
 
 Data comes from two places. [Spotify's Web API](https://developer.spotify.com/documentation/web-api) identifies each track and supplies the catalogue facts. [MusicBrainz](https://musicbrainz.org) supplies genres, the original release date, and the release typing. The app is built with [Electron](https://www.electronjs.org).
 
-This project follows [Semantic Versioning](https://semver.org).
+This project follows [Semantic Versioning](https://semver.org). The current release is [1.0.0](https://github.com/KotvicCodes/musicalist/releases/latest).
+
+## Install
+
+Download the latest build from the [releases page](https://github.com/KotvicCodes/musicalist/releases/latest), unzip it, and move Musicalist to your Applications folder.
+
+Only a macOS build is published at the moment. On Windows or Linux, build it yourself with the steps under [Development](#development) and run `npm run make`; the Squirrel, deb and rpm packagers are already configured and will produce a package for whichever platform you build on.
+
+Then follow the setup below, which every platform needs.
 
 ## Setup
 
@@ -41,18 +49,18 @@ Reissue drift is worth explaining. Spotify serves whichever release of a song it
 
 ## What you get per song
 
-| Field | Source |
-| --- | --- |
-| Title, artists, album, album type, total tracks | Spotify |
-| Release date and its precision | Spotify |
-| Duration, explicit flag, track and disc number | Spotify |
-| ISRC, Spotify URL, cover art | Spotify |
-| Artist genres | Spotify (see limitations) |
-| Genres, with community vote weights | MusicBrainz |
-| Tags | MusicBrainz |
-| Original release date | MusicBrainz |
-| Release type and secondary types (Live, Compilation, Soundtrack, Remix) | MusicBrainz |
-| Recording ID | MusicBrainz |
+| Field                                                                   | Source                    |
+| ----------------------------------------------------------------------- | ------------------------- |
+| Title, artists, album, album type, total tracks                         | Spotify                   |
+| Release date and its precision                                          | Spotify                   |
+| Duration, explicit flag, track and disc number                          | Spotify                   |
+| ISRC, Spotify URL, cover art                                            | Spotify                   |
+| Artist genres                                                           | Spotify (see limitations) |
+| Genres, with community vote weights                                     | MusicBrainz               |
+| Tags                                                                    | MusicBrainz               |
+| Original release date                                                   | MusicBrainz               |
+| Release type and secondary types (Live, Compilation, Soundtrack, Remix) | MusicBrainz               |
+| Recording ID                                                            | MusicBrainz               |
 
 ## Limitations
 
@@ -66,16 +74,28 @@ Reissue drift is worth explaining. Spotify serves whichever release of a song it
 
 ## Development
 
+Run it from source:
+
 ```bash
 npm install
 npm start
 ```
+
+Run the tests:
 
 ```bash
 npm test
 ```
 
 Tests run on Node's built-in test runner with no extra dependencies. Network calls are stubbed, so the suite needs no credentials and no connection.
+
+Build a package for the platform you are on:
+
+```bash
+npm run make
+```
+
+The result lands in `out/make`.
 
 ## Credits
 

@@ -1,4 +1,5 @@
-//
+// SPDX-FileCopyrightText: 2025-2026 Kotvič
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 //! Constants
 const API_BASE = 'https://musicbrainz.org/ws/2'

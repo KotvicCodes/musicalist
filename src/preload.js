@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025-2026 Kotvič
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // See the Electron documentation for details on how to use preload scripts:
 // https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
 

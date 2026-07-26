@@ -2,131 +2,72 @@
 <!-- SPDX-FileCopyrightText: 2025-2026 Kotvič -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <html lang="en">
-     <head>
-          <meta charset="UTF-8" />
-          <!--
-               Result cards are built as HTML from Spotify and MusicBrainz data, and
+    <head>
+        <meta charset="UTF-8" />
+        <!--
+               Result cards are built as HTML from Deezer and MusicBrainz data, and
                MusicBrainz genres and tags are community editable. Every value is run
                through escapeHtml first, so this is the backstop for the day someone
                adds a field and forgets: nothing outside this folder can ever load or
                run, so a missed escape cannot become remote code execution.
           -->
-          <meta
-               http-equiv="Content-Security-Policy"
-               content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
-          />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Musicalist</title>
-          <link rel="stylesheet" href="index.css" />
-          <script defer src="text.js"></script>
-          <script defer src="analysis.js"></script>
-          <script defer src="renderer.js"></script>
-     </head>
-     <body class="body">
-          <!--! Header -->
-          <header class="header">
-               <div class="header__brand">
-                    <h1 class="header__title">Musicalist</h1>
-                    <p class="header__tagline">
-                         Song metadata and list analysis, from Spotify and MusicBrainz.
-                    </p>
-               </div>
-               <button id="helpButtonQ" class="button button--ghost" title="Open the project README">
-                    Help
-               </button>
-          </header>
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+        />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Musicalist</title>
+        <link rel="stylesheet" href="index.css" />
+        <script defer src="text.js"></script>
+        <script defer src="analysis.js"></script>
+        <script defer src="renderer.js"></script>
+    </head>
+    <body class="body">
+        <!--! Header -->
+        <header class="header">
+            <div class="header__brand">
+                <h1 class="header__title">Musicalist</h1>
+                <p class="header__tagline">
+                    Song metadata and list analysis, from Deezer and MusicBrainz.
+                </p>
+            </div>
+            <button id="helpButtonQ" class="button button--ghost" title="Open the project README">
+                Help
+            </button>
+        </header>
 
-          <!--! Main -->
-          <main class="main">
-               <!--* Input -->
-               <section class="card" id="inputQ">
-                    <label class="field__label" for="inputTextareaQ">Your songs</label>
-                    <p class="field__hint">Enter songs separated by commas.</p>
-                    <textarea
-                         id="inputTextareaQ"
-                         class="field__textarea"
-                         placeholder="Bohemian Rhapsody, Smells Like Teen Spirit, Billie Jean"
-                    ></textarea>
-                    <div class="actions">
-                         <button id="scrapeButtonQ" class="button button--primary">Proceed</button>
-                         <span id="statusQ" class="status" aria-live="polite"></span>
+        <!--! Main -->
+        <main class="main">
+            <!--* Input -->
+            <section class="card" id="inputQ">
+                <label class="field__label" for="inputTextareaQ">Your songs</label>
+                <p class="field__hint">Enter songs separated by commas.</p>
+                <textarea
+                    id="inputTextareaQ"
+                    class="field__textarea"
+                    placeholder="Bohemian Rhapsody, Smells Like Teen Spirit, Billie Jean"
+                ></textarea>
+                <div class="actions">
+                    <button id="scrapeButtonQ" class="button button--primary">Proceed</button>
+                    <span id="statusQ" class="status" aria-live="polite"></span>
+                </div>
+            </section>
+
+            <!--* Summary -->
+            <section id="summaryQ" class="card summary hidden">
+                <div class="summary__head">
+                    <h2 class="summary__title">Summary</h2>
+                    <div class="summary__actions">
+                        <button id="exportJsonQ" class="button button--ghost">Export JSON</button>
+                        <button id="exportCsvQ" class="button button--ghost">Export CSV</button>
+                        <span id="exportStatusQ" class="status" aria-live="polite"></span>
                     </div>
-               </section>
+                </div>
+                <div id="summaryStatsQ" class="summary__stats"></div>
+            </section>
 
-               <!--* Advanced settings -->
-               <section class="card card--muted">
-                    <button id="advancedButtonQ" class="disclosure" aria-expanded="false">
-                         <span class="disclosure__caret">▸</span> Advanced settings
-                    </button>
-                    <div id="advancedQ" class="advanced hidden">
-                         <p class="field__hint">
-                              Musicalist needs your own Spotify app credentials. Create one at
-                              <a href="#" id="dashboardLinkQ" class="link">developer.spotify.com</a>,
-                              then paste the Client ID and Secret here. They are encrypted by your
-                              operating system and never leave this machine.
-                         </p>
-                         <div class="field">
-                              <label class="field__label" for="clientIdQ">Spotify Client ID</label>
-                              <input
-                                   id="clientIdQ"
-                                   class="field__input"
-                                   type="text"
-                                   autocomplete="off"
-                                   spellcheck="false"
-                              />
-                         </div>
-                         <div class="field">
-                              <label class="field__label" for="clientSecretQ"
-                                   >Spotify Client Secret</label
-                              >
-                              <input
-                                   id="clientSecretQ"
-                                   class="field__input"
-                                   type="password"
-                                   autocomplete="off"
-                                   spellcheck="false"
-                              />
-                         </div>
-                         <div class="field">
-                              <label class="field__label" for="marketQ">Market</label>
-                              <p class="field__hint">
-                                   Which country's catalogue to search. Affects which release of a song
-                                   you get back.
-                              </p>
-                              <select id="marketQ" class="field__input">
-                                   <option value="">Any market</option>
-                                   <option value="US">United States</option>
-                                   <option value="GB">United Kingdom</option>
-                                   <option value="CZ">Czechia</option>
-                                   <option value="SK">Slovakia</option>
-                                   <option value="DE">Germany</option>
-                                   <option value="FR">France</option>
-                                   <option value="JP">Japan</option>
-                              </select>
-                         </div>
-                         <div class="actions">
-                              <button id="saveCredentialsQ" class="button button--primary">Save</button>
-                              <button id="clearCredentialsQ" class="button button--ghost">Forget</button>
-                              <span id="credentialsStatusQ" class="status" aria-live="polite"></span>
-                         </div>
-                    </div>
-               </section>
-
-               <!--* Summary -->
-               <section id="summaryQ" class="card summary hidden">
-                    <div class="summary__head">
-                         <h2 class="summary__title">Summary</h2>
-                         <div class="summary__actions">
-                              <button id="exportJsonQ" class="button button--ghost">Export JSON</button>
-                              <button id="exportCsvQ" class="button button--ghost">Export CSV</button>
-                              <span id="exportStatusQ" class="status" aria-live="polite"></span>
-                         </div>
-                    </div>
-                    <div id="summaryStatsQ" class="summary__stats"></div>
-               </section>
-
-               <!--* Output -->
-               <section id="outputQ" class="output"></section>
-          </main>
-     </body>
+            <!--* Output -->
+            <section id="outputQ" class="output"></section>
+        </main>
+    </body>
 </html>

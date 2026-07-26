@@ -1,0 +1,5 @@
+# npm owns these two and rewrites them with its own two-space indentation on
+# every install and version bump, so Prettier can never win the argument. They
+# were the only files failing `prettier --check` before this file existed.
+package.json
+package-lock.json

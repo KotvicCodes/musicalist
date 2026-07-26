@@ -7,7 +7,19 @@ const { FuseV1Options, FuseVersion } = require('@electron/fuses')
 module.exports = {
      packagerConfig: {
           asar: true,
-          icon: 'assets/icon'
+          icon: 'assets/icon',
+          // Packager only signs the macOS bundle when osxSign is set. Without it the
+          // only signature left on the app is the ad-hoc one the fuses plugin applies
+          // partway through packaging, before the binaries are renamed and before the
+          // Info.plist gets the app name, version and asar hash. That seal no longer
+          // matches what ships, so macOS calls the download damaged and offers no way
+          // past it. Signing here runs last, over the finished bundle. There is no
+          // paid Apple certificate, so this is still ad-hoc: identity '-' with
+          // validation off, which skips the keychain lookup that has nothing to find.
+          osxSign: {
+               identity: '-',
+               identityValidation: false
+          }
      },
      rebuildConfig: {},
      makers: [

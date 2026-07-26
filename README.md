@@ -4,7 +4,7 @@ Musicalist takes a list of songs and gives you back structured metadata for ever
 
 Data comes from two places. [Spotify's Web API](https://developer.spotify.com/documentation/web-api) identifies each track and supplies the catalogue facts. [MusicBrainz](https://musicbrainz.org) supplies genres, the original release date, and the release typing. The app is built with [Electron](https://www.electronjs.org).
 
-This project follows [Semantic Versioning](https://semver.org). The current release is [1.0.0](https://github.com/KotvicCodes/musicalist/releases/latest).
+This project follows [Semantic Versioning](https://semver.org). See the [latest release](https://github.com/KotvicCodes/musicalist/releases/latest) for the current version.
 
 ## Install
 
@@ -17,6 +17,8 @@ Grab the build for your system from the [releases page](https://github.com/Kotvi
 | Linux                | `*.deb` or `*.rpm`              | Install with your package manager, or take the zip         |
 
 Intel Macs are not built. On an Intel Mac, or any other system without a package above, build it yourself with the steps under [Development](#development).
+
+The `.nupkg` and `RELEASES` files on the release are used by the Windows installer's own updater. You do not need to download them.
 
 ### The first launch will warn you
 

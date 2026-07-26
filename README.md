@@ -110,6 +110,14 @@ npm run make
 
 The result lands in `out/make`.
 
+## License
+
+Musicalist is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+Musicalist is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+The full licence text is in [LICENSE.txt](LICENSE.txt), or at <https://www.gnu.org/licenses/>.
+
 ## Credits
 
 Metadata comes from [Spotify](https://developer.spotify.com/documentation/web-api) and [MusicBrainz](https://musicbrainz.org), the latter licensed under [CC0 and CC BY-NC-SA](https://musicbrainz.org/doc/About/Data_License). Musicalist is not affiliated with or endorsed by either.

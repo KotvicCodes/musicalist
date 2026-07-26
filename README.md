@@ -8,9 +8,22 @@ This project follows [Semantic Versioning](https://semver.org). The current rele
 
 ## Install
 
-Download the latest build from the [releases page](https://github.com/KotvicCodes/musicalist/releases/latest), unzip it, and move Musicalist to your Applications folder.
+Grab the build for your system from the [releases page](https://github.com/KotvicCodes/musicalist/releases/latest).
 
-Only a macOS build is published at the moment. On Windows or Linux, build it yourself with the steps under [Development](#development) and run `npm run make`; the Squirrel, deb and rpm packagers are already configured and will produce a package for whichever platform you build on.
+| System               | Download                        | What to do                                                 |
+| -------------------- | ------------------------------- | ---------------------------------------------------------- |
+| macOS, Apple Silicon | `musicalist-darwin-arm64-*.zip` | Unzip and move Musicalist to Applications                  |
+| Windows              | `*Setup.exe`                    | Run the installer, or take the zip if you want it portable |
+| Linux                | `*.deb` or `*.rpm`              | Install with your package manager, or take the zip         |
+
+Intel Macs are not built. On an Intel Mac, or any other system without a package above, build it yourself with the steps under [Development](#development).
+
+### The first launch will warn you
+
+The builds are not code signed, because signing needs paid Apple and Windows certificates. The apps are fine, but your system has no way to confirm that, so it will object the first time:
+
+- **macOS** says the developer cannot be verified. Right click Musicalist, choose Open, then confirm. You only need to do this once.
+- **Windows** shows a SmartScreen prompt. Choose More info, then Run anyway.
 
 Then follow the setup below, which every platform needs.
 

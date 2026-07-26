@@ -24,7 +24,14 @@ The `.nupkg` and `RELEASES` files on the release are used by the Windows install
 
 The builds are not code signed, because signing needs paid Apple and Windows certificates. The apps are fine, but your system has no way to confirm that, so it will object the first time:
 
-- **macOS** says the developer cannot be verified. Right click Musicalist, choose Open, then confirm. You only need to do this once.
+- **macOS** refuses to open Musicalist and offers to move it to the Bin. Open **System Settings**, go to **Privacy & Security**, scroll to the bottom, and click **Open Anyway** next to the message about Musicalist. You only need to do this once. Right clicking and choosing Open no longer works on macOS 15 and later; Apple removed that shortcut.
+
+     If the button is not there, clear the download flag from Terminal instead and then open the app normally:
+
+     ```
+     xattr -dr com.apple.quarantine /Applications/musicalist.app
+     ```
+
 - **Windows** shows a SmartScreen prompt. Choose More info, then Run anyway.
 
 Then follow the setup below, which every platform needs.

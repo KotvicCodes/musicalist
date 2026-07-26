@@ -25,6 +25,9 @@ test('handles an empty list without dividing by zero', () => {
      assert.deepEqual(summary.topGenres, [])
      assert.equal(summary.meanDurationMs, null)
      assert.equal(summary.medianDurationMs, null)
+     assert.equal(summary.meanBpm, null)
+     assert.equal(summary.medianBpm, null)
+     assert.equal(summary.bpmMissing, 0)
      assert.equal(summary.explicit.ratio, 0)
      assert.equal(summary.reissueDrift.averageYears, 0)
      assert.equal(summary.artists.distinct, 0)
@@ -57,7 +60,7 @@ test('buckets by decade using the original release date', () => {
      ])
 })
 
-test('falls back to the Spotify date when MusicBrainz has none', () => {
+test('falls back to the Deezer date when MusicBrainz has none', () => {
      assert.equal(
           effectiveYear(songRow({ originalReleaseDate: null, releaseDate: ['1984-01-01'] })),
           1984
@@ -65,7 +68,7 @@ test('falls back to the Spotify date when MusicBrainz has none', () => {
      assert.equal(effectiveYear(songRow({ originalReleaseDate: null, releaseDate: [] })), null)
 })
 
-test('measures how far Spotify dates drift from the original', () => {
+test('measures how far Deezer dates drift from the original', () => {
      const summary = summarise([
           // 2011 reissue of a 1975 song: 36 years late
           songRow({ originalReleaseDate: '1975-11-21', releaseDate: ['2011-01-01'] }),
@@ -79,7 +82,7 @@ test('measures how far Spotify dates drift from the original', () => {
      assert.equal(summary.reissueDrift.averageYears, 20)
 })
 
-test('does not count a Spotify date that predates the original', () => {
+test('does not count a Deezer date that predates the original', () => {
      const summary = summarise([
           songRow({ originalReleaseDate: '2011-01-01', releaseDate: ['1975-01-01'] })
      ])
@@ -137,6 +140,53 @@ test('formats durations as minutes and seconds', () => {
      assert.equal(formatDuration('oops'), '—')
 })
 
+//! BPM
+test('reports mean and median BPM as whole numbers', () => {
+     const summary = summarise([
+          songRow({ bpm: 100.4 }),
+          songRow({ bpm: 120.1 }),
+          songRow({ bpm: 140.9 })
+     ])
+
+     assert.equal(summary.meanBpm, 120)
+     assert.equal(summary.medianBpm, 120)
+     assert.equal(summary.bpmMissing, 0)
+})
+
+test('averages only the songs Deezer analysed, and says how many it skipped', () => {
+     const summary = summarise([
+          songRow({ bpm: 100 }),
+          songRow({ bpm: 200 }),
+          songRow({ bpm: null }),
+          songRow({ bpm: null })
+     ])
+
+     assert.equal(summary.meanBpm, 150)
+     assert.equal(summary.bpmMissing, 2)
+})
+
+test('reports no BPM at all when nothing was analysed', () => {
+     const summary = summarise([songRow({ bpm: null }), songRow({ bpm: null })])
+
+     assert.equal(summary.meanBpm, null)
+     assert.equal(summary.medianBpm, null)
+     assert.equal(summary.bpmMissing, 2)
+})
+
+test('treats a zero BPM as unanalysed rather than dragging the average down', () => {
+     const summary = summarise([songRow({ bpm: 0 }), songRow({ bpm: 120 })])
+
+     assert.equal(summary.meanBpm, 120)
+     assert.equal(summary.bpmMissing, 1)
+})
+
+test('does not count missing BPM on songs that were never found', () => {
+     const summary = summarise([songRow({ bpm: 120 }), songRow({ found: false, bpm: null })])
+
+     assert.equal(summary.meanBpm, 120)
+     assert.equal(summary.bpmMissing, 0)
+})
+
 //! Explicit
 test('reports the explicit ratio over rated songs only', () => {
      const summary = summarise([
@@ -155,7 +205,7 @@ test('mixes release types, preferring MusicBrainz typing', () => {
           songRow({ releaseType: 'Album' }),
           songRow({ releaseType: 'Single' }),
           songRow({ releaseType: 'Album' }),
-          // no MusicBrainz type, so the Spotify album type stands in
+          // no MusicBrainz type, so the Deezer album type stands in
           songRow({ releaseType: null, albumType: 'compilation' })
      ])
 

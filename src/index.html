@@ -5,7 +5,7 @@
      <head>
           <meta charset="UTF-8" />
           <!--
-               Result cards are built as HTML from Spotify and MusicBrainz data, and
+               Result cards are built as HTML from Deezer and MusicBrainz data, and
                MusicBrainz genres and tags are community editable. Every value is run
                through escapeHtml first, so this is the backstop for the day someone
                adds a field and forgets: nothing outside this folder can ever load or
@@ -28,7 +28,7 @@
                <div class="header__brand">
                     <h1 class="header__title">Musicalist</h1>
                     <p class="header__tagline">
-                         Song metadata and list analysis, from Spotify and MusicBrainz.
+                         Song metadata and list analysis, from Deezer and MusicBrainz.
                     </p>
                </div>
                <button id="helpButtonQ" class="button button--ghost" title="Open the project README">
@@ -50,65 +50,6 @@
                     <div class="actions">
                          <button id="scrapeButtonQ" class="button button--primary">Proceed</button>
                          <span id="statusQ" class="status" aria-live="polite"></span>
-                    </div>
-               </section>
-
-               <!--* Advanced settings -->
-               <section class="card card--muted">
-                    <button id="advancedButtonQ" class="disclosure" aria-expanded="false">
-                         <span class="disclosure__caret">▸</span> Advanced settings
-                    </button>
-                    <div id="advancedQ" class="advanced hidden">
-                         <p class="field__hint">
-                              Musicalist needs your own Spotify app credentials. Create one at
-                              <a href="#" id="dashboardLinkQ" class="link">developer.spotify.com</a>,
-                              then paste the Client ID and Secret here. They are encrypted by your
-                              operating system and never leave this machine.
-                         </p>
-                         <div class="field">
-                              <label class="field__label" for="clientIdQ">Spotify Client ID</label>
-                              <input
-                                   id="clientIdQ"
-                                   class="field__input"
-                                   type="text"
-                                   autocomplete="off"
-                                   spellcheck="false"
-                              />
-                         </div>
-                         <div class="field">
-                              <label class="field__label" for="clientSecretQ"
-                                   >Spotify Client Secret</label
-                              >
-                              <input
-                                   id="clientSecretQ"
-                                   class="field__input"
-                                   type="password"
-                                   autocomplete="off"
-                                   spellcheck="false"
-                              />
-                         </div>
-                         <div class="field">
-                              <label class="field__label" for="marketQ">Market</label>
-                              <p class="field__hint">
-                                   Which country's catalogue to search. Affects which release of a song
-                                   you get back.
-                              </p>
-                              <select id="marketQ" class="field__input">
-                                   <option value="">Any market</option>
-                                   <option value="US">United States</option>
-                                   <option value="GB">United Kingdom</option>
-                                   <option value="CZ">Czechia</option>
-                                   <option value="SK">Slovakia</option>
-                                   <option value="DE">Germany</option>
-                                   <option value="FR">France</option>
-                                   <option value="JP">Japan</option>
-                              </select>
-                         </div>
-                         <div class="actions">
-                              <button id="saveCredentialsQ" class="button button--primary">Save</button>
-                              <button id="clearCredentialsQ" class="button button--ghost">Forget</button>
-                              <span id="credentialsStatusQ" class="status" aria-live="polite"></span>
-                         </div>
                     </div>
                </section>
 

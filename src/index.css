@@ -87,15 +87,7 @@ body {
      padding: 1.1rem 1.2rem;
 }
 
-.card--muted {
-     background: var(--surface-muted);
-}
-
 /*! Fields */
-
-.field + .field {
-     margin-top: 0.9rem;
-}
 
 .field__label {
      display: block;
@@ -109,8 +101,7 @@ body {
      font-size: 0.82rem;
 }
 
-.field__textarea,
-.field__input {
+.field__textarea {
      width: 100%;
      font: inherit;
      color: var(--text);
@@ -125,18 +116,9 @@ body {
      resize: vertical;
 }
 
-.field__textarea:focus,
-.field__input:focus {
+.field__textarea:focus {
      outline: 2px solid var(--accent);
      outline-offset: 1px;
-}
-
-.field__checkbox {
-     display: flex;
-     align-items: center;
-     gap: 0.5rem;
-     margin-top: 0.9rem;
-     font-size: 0.9rem;
 }
 
 /*! Buttons */
@@ -180,35 +162,6 @@ body {
 .status {
      color: var(--text-muted);
      font-size: 0.85rem;
-}
-
-/*! Disclosure */
-
-.disclosure {
-     font: inherit;
-     font-weight: 600;
-     background: none;
-     border: none;
-     color: var(--text);
-     cursor: pointer;
-     padding: 0;
-}
-
-.disclosure__caret {
-     display: inline-block;
-     transition: transform 0.15s ease;
-}
-
-.disclosure[aria-expanded='true'] .disclosure__caret {
-     transform: rotate(90deg);
-}
-
-.advanced {
-     margin-top: 0.9rem;
-}
-
-.link {
-     color: var(--accent);
 }
 
 /*! Summary */

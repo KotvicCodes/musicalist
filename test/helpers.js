@@ -36,31 +36,50 @@ function stubFetch(handler) {
 }
 
 //! Fixtures
-const TOKEN_BODY = { access_token: 'token-abc', token_type: 'Bearer', expires_in: 3600 }
 
-function spotifyTrack(overrides = {}) {
+// What GET /search returns per hit: no bpm, no release date, one artist only.
+function deezerHit(overrides = {}) {
      return {
-          name: 'Bohemian Rhapsody',
-          duration_ms: 354320,
-          explicit: false,
-          track_number: 11,
-          disc_number: 1,
-          external_ids: { isrc: 'GBUM71029604' },
-          external_urls: { spotify: 'https://open.spotify.com/track/abc' },
-          artists: [
-               { name: 'Queen', id: 'artist-1', external_urls: { spotify: 'https://spotify/queen' } }
-          ],
+          id: 42,
+          title: 'Bohemian Rhapsody',
+          isrc: 'GBUM71029604',
+          link: 'https://www.deezer.com/track/42',
+          duration: 354,
+          explicit_lyrics: false,
+          artist: { id: 1, name: 'Queen', link: 'https://www.deezer.com/artist/1' },
           album: {
-               name: 'A Night at the Opera',
-               album_type: 'album',
-               total_tracks: 12,
-               release_date: '2011-01-01',
-               release_date_precision: 'day',
-               images: [
-                    { url: 'https://img/large.jpg', height: 640 },
-                    { url: 'https://img/medium.jpg', height: 300 }
-               ]
+               id: 7,
+               title: 'A Night at the Opera',
+               cover_medium: 'https://img/medium.jpg',
+               cover_big: 'https://img/big.jpg'
           },
+          ...overrides
+     }
+}
+
+// What GET /track/{id} adds on top: tempo, the served release date, positions
+// and the full credit list.
+function deezerTrack(overrides = {}) {
+     return {
+          ...deezerHit(),
+          release_date: '2011-01-01',
+          track_position: 11,
+          disk_number: 1,
+          bpm: 143.9,
+          contributors: [{ id: 1, name: 'Queen', link: 'https://www.deezer.com/artist/1' }],
+          ...overrides
+     }
+}
+
+function deezerAlbum(overrides = {}) {
+     return {
+          id: 7,
+          title: 'A Night at the Opera',
+          record_type: 'album',
+          nb_tracks: 12,
+          release_date: '2011-01-01',
+          genres: { data: [{ id: 152, name: 'Rock' }] },
+          cover_big: 'https://img/big.jpg',
           ...overrides
      }
 }
@@ -71,7 +90,7 @@ function songRow(overrides = {}) {
           found: true,
           title: 'Bohemian Rhapsody',
           author: 'Queen',
-          artists: [{ name: 'Queen', id: 'artist-1', url: null }],
+          artists: [{ name: 'Queen', id: 1, url: 'https://www.deezer.com/artist/1' }],
           album: 'A Night at the Opera',
           albumType: 'album',
           albumTotalTracks: 12,
@@ -80,14 +99,15 @@ function songRow(overrides = {}) {
           originalReleaseDate: '1975-11-21',
           releaseType: 'Album',
           releaseSecondaryTypes: [],
-          durationMs: 354320,
+          durationMs: 354000,
+          bpm: 143.9,
           explicit: false,
           trackNumber: 11,
           discNumber: 1,
           isrc: 'GBUM71029604',
-          spotifyUrl: 'https://open.spotify.com/track/abc',
-          coverArt: 'https://img/medium.jpg',
-          spotifyGenres: ['classic rock'],
+          deezerUrl: 'https://www.deezer.com/track/42',
+          coverArt: 'https://img/big.jpg',
+          deezerGenres: ['Rock'],
           wikiGenres: ['rock', 'hard rock'],
           genreWeights: [
                { name: 'rock', count: 13 },
@@ -99,4 +119,4 @@ function songRow(overrides = {}) {
      }
 }
 
-module.exports = { response, stubFetch, TOKEN_BODY, spotifyTrack, songRow }
+module.exports = { response, stubFetch, deezerHit, deezerTrack, deezerAlbum, songRow }

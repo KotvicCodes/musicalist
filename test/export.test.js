@@ -66,6 +66,15 @@ test('flattens genres and artists into single cells', () => {
      assert.ok(record.includes('Queen'))
 })
 
+test('carries the BPM column, blank where Deezer has none', () => {
+     const header = lines(toCsv([]))[0].split(',')
+     const index = header.indexOf('bpm')
+     assert.ok(index >= 0)
+
+     assert.equal(lines(toCsv([songRow({ bpm: 143.9 })]))[1].split(',')[index], '143.9')
+     assert.equal(lines(toCsv([songRow({ bpm: null })]))[1].split(',')[index], '')
+})
+
 test('exports a missed song as an empty-but-present row', () => {
      const record = lines(toCsv([{ query: 'Nonsense', found: false }]))[1]
 
@@ -83,7 +92,7 @@ test('bundles songs and the summary together', () => {
 
      assert.equal(parsed.songs.length, 2)
      assert.equal(parsed.summary.found, 1)
-     assert.match(parsed.source, /Spotify/)
+     assert.match(parsed.source, /Deezer/)
      assert.ok(!Number.isNaN(Date.parse(parsed.exportedAt)))
 })
 

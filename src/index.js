@@ -4,7 +4,6 @@
 //! Import
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron')
 const { lookupSongs } = require('./api/lookup.js')
-const credentials = require('./credentials.js')
 const { toCsv, toJson } = require('./export.js')
 const fs = require('node:fs/promises')
 const path = require('node:path')
@@ -55,31 +54,11 @@ ipcMain.handle('open-external', async (event, url) => {
      }
 })
 
-//! Credentials
-// The secret never travels back to the renderer, only whether one is stored.
-ipcMain.handle('get-credentials', async () => credentials.describe())
-
-ipcMain.handle('set-credentials', async (event, { clientId, clientSecret }) => {
-     const result = credentials.save({ clientId, clientSecret })
-     return { ...result, ...credentials.describe() }
-})
-
-ipcMain.handle('clear-credentials', async () => {
-     credentials.clear()
-     return credentials.describe()
-})
-
 //! Lookup Listener
-ipcMain.handle('run-lookup', async (event, { songs, market }) => {
-     const stored = credentials.load()
-     if (!stored) {
-          throw new Error('Add your Spotify Client ID and Secret in Advanced settings first.')
-     }
-
+// Both APIs are open, so there is nothing to configure and nothing to check
+// before a run: the songs go straight out.
+ipcMain.handle('run-lookup', async (event, { songs }) => {
      return lookupSongs(songs, {
-          clientId: stored.clientId,
-          clientSecret: stored.clientSecret,
-          market,
           // stream each finished song back to the renderer as it is ready
           onProgress: (song) => {
                if (!event.sender.isDestroyed()) {

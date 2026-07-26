@@ -1,0 +1,106 @@
+name: Build
+
+# Electron Forge can only build for the platform it runs on: Squirrel needs
+# Windows, deb and rpm need Linux, and the macOS app needs macOS. One runner per
+# platform is the only way to produce a complete release.
+on:
+     push:
+          tags:
+               - 'v*'
+     workflow_dispatch:
+          inputs:
+               tag:
+                    description: 'Existing tag to build and attach to, for example v1.0.0'
+                    required: false
+                    type: string
+
+# Needed so the release job can attach the finished packages.
+permissions:
+     contents: write
+
+jobs:
+     build:
+          name: ${{ matrix.label }}
+          runs-on: ${{ matrix.os }}
+          strategy:
+               # One platform failing should not hide whether the others worked.
+               fail-fast: false
+               matrix:
+                    include:
+                         - os: macos-latest
+                           label: macOS (Apple Silicon)
+                         - os: windows-latest
+                           label: Windows (x64)
+                         - os: ubuntu-latest
+                           label: Linux (deb and rpm)
+
+          steps:
+               - name: Check out
+                 uses: actions/checkout@v4
+                 with:
+                      # A manual run builds whatever tag was typed in; a tag push
+                      # builds itself.
+                      ref: ${{ inputs.tag || github.ref }}
+
+               - name: Set up Node
+                 uses: actions/setup-node@v4
+                 with:
+                      node-version: 20
+                      cache: npm
+
+               # The deb and rpm makers shell out to these; they are not on the
+               # runner by default.
+               - name: Install Linux packaging tools
+                 if: runner.os == 'Linux'
+                 run: sudo apt-get update && sudo apt-get install -y rpm fakeroot
+
+               - name: Install dependencies
+                 run: npm ci
+
+               # A broken build must never reach a release.
+               - name: Run tests
+                 run: npm test
+
+               - name: Build
+                 run: npm run make
+
+               - name: Upload packages
+                 uses: actions/upload-artifact@v4
+                 with:
+                      name: ${{ matrix.os }}
+                      path: out/make/**/*
+                      if-no-files-found: error
+
+     release:
+          name: Attach to release
+          needs: build
+          runs-on: ubuntu-latest
+          steps:
+               - name: Download every platform's packages
+                 uses: actions/download-artifact@v4
+                 with:
+                      path: packages
+
+               # Uploading through the bundled gh CLI keeps this workflow free of
+               # third-party actions. --clobber lets a rerun replace assets rather
+               # than failing, which is what makes backfilling an existing release
+               # work. Filenames are read into an array because Squirrel names its
+               # installer with a space in it.
+               - name: Attach packages to the release
+                 shell: bash
+                 env:
+                      GH_TOKEN: ${{ github.token }}
+                      REPO: ${{ github.repository }}
+                      TAG: ${{ inputs.tag || github.ref_name }}
+                 run: |
+                      set -euo pipefail
+                      mapfile -t FILES < <(find packages -type f | sort)
+                      printf 'attaching to %s:\n' "$TAG"
+                      printf '  %s\n' "${FILES[@]}"
+
+                      # A tag pushed without a release yet needs one creating first.
+                      if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+                           gh release create "$TAG" --repo "$REPO" --title "Musicalist ${TAG#v}" --generate-notes
+                      fi
+
+                      gh release upload "$TAG" "${FILES[@]}" --repo "$REPO" --clobber

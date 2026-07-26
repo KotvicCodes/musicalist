@@ -42,6 +42,17 @@ jobs:
                       # builds itself.
                       ref: ${{ inputs.tag || github.ref }}
 
+               # A tag is an immutable snapshot, so rebuilding an old tag rebuilds
+               # its old source. Printing what was actually checked out makes that
+               # obvious instead of leaving you wondering why a fix on main did not
+               # take effect.
+               - name: Report what is being built
+                 shell: bash
+                 run: |
+                      echo "ref built:  ${{ inputs.tag || github.ref }}"
+                      echo "commit:     $(git rev-parse --short HEAD)"
+                      node -e 'const p=require("./package.json"); console.log("version:   ", p.version); console.log("license:   ", p.license ?? "MISSING (the rpm build will fail)")'
+
                - name: Set up Node
                  uses: actions/setup-node@v4
                  with:

@@ -8,43 +8,40 @@ const { escapeHtml, textToArray } = require('../src/text.js')
 
 //! Escaping
 test('escapes every character that could break out of markup', () => {
-     assert.equal(escapeHtml('<script>alert(1)</script>'), '&lt;script&gt;alert(1)&lt;/script&gt;')
-     assert.equal(escapeHtml('AT&T'), 'AT&amp;T')
-     assert.equal(escapeHtml(`"quoted" 'single'`), '&quot;quoted&quot; &#39;single&#39;')
+    assert.equal(escapeHtml('<script>alert(1)</script>'), '&lt;script&gt;alert(1)&lt;/script&gt;')
+    assert.equal(escapeHtml('AT&T'), 'AT&amp;T')
+    assert.equal(escapeHtml(`"quoted" 'single'`), '&quot;quoted&quot; &#39;single&#39;')
 })
 
 test('escapes the ampersand first so entities are not double-broken', () => {
-     assert.equal(escapeHtml('&lt;'), '&amp;lt;')
+    assert.equal(escapeHtml('&lt;'), '&amp;lt;')
 })
 
 test('coerces non-strings', () => {
-     assert.equal(escapeHtml(42), '42')
-     assert.equal(escapeHtml(null), 'null')
+    assert.equal(escapeHtml(42), '42')
+    assert.equal(escapeHtml(null), 'null')
 })
 
 //! Song List Parsing
 test('splits on commas and trims', () => {
-     assert.deepEqual(textToArray('Bohemian Rhapsody, Billie Jean'), [
-          'Bohemian Rhapsody',
-          'Billie Jean'
-     ])
+    assert.deepEqual(textToArray('Bohemian Rhapsody, Billie Jean'), ['Bohemian Rhapsody', 'Billie Jean'])
 })
 
 test('tolerates line breaks and stray whitespace', () => {
-     assert.deepEqual(textToArray('  One  ,\n  Two  ,\n\n  Three  '), ['One', 'Two', 'Three'])
+    assert.deepEqual(textToArray('  One  ,\n  Two  ,\n\n  Three  '), ['One', 'Two', 'Three'])
 })
 
 test('drops empty entries from trailing or doubled commas', () => {
-     assert.deepEqual(textToArray('One,,Two,'), ['One', 'Two'])
+    assert.deepEqual(textToArray('One,,Two,'), ['One', 'Two'])
 })
 
 test('removes duplicates', () => {
-     assert.deepEqual(textToArray('One, Two, One'), ['One', 'Two'])
+    assert.deepEqual(textToArray('One, Two, One'), ['One', 'Two'])
 })
 
 test('returns an empty list for empty input', () => {
-     assert.deepEqual(textToArray(''), [])
-     assert.deepEqual(textToArray('   \n  '), [])
-     assert.deepEqual(textToArray(null), [])
-     assert.deepEqual(textToArray(undefined), [])
+    assert.deepEqual(textToArray(''), [])
+    assert.deepEqual(textToArray('   \n  '), [])
+    assert.deepEqual(textToArray(null), [])
+    assert.deepEqual(textToArray(undefined), [])
 })

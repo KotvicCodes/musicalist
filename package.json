@@ -6,12 +6,12 @@
     "song",
     "music",
     "metadata",
-    "spotify",
+    "deezer",
     "musicbrainz",
     "electron"
   ],
   "main": "src/index.js",
-  "version": "1.0.3",
+  "version": "1.1.1",
   "license": "GPL-3.0-or-later",
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1"
@@ -22,7 +22,8 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "echo \"No linting configured\""
+    "format": "prettier --write .",
+    "lint": "prettier --check ."
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.2.0",
@@ -39,7 +40,7 @@
   "prettier": {
     "semi": false,
     "singleQuote": true,
-    "tabWidth": 5,
+    "tabWidth": 4,
     "printWidth": 105,
     "trailingComma": "none"
   }

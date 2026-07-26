@@ -14,20 +14,21 @@ const COLUMNS = [
      ['album', (row) => row.album],
      ['albumType', (row) => row.albumType],
      ['albumTotalTracks', (row) => row.albumTotalTracks],
-     ['spotifyReleaseDate', (row) => (row.releaseDate || [])[0] || null],
+     ['deezerReleaseDate', (row) => (row.releaseDate || [])[0] || null],
      ['releaseDatePrecision', (row) => row.releaseDatePrecision],
      ['originalReleaseDate', (row) => row.originalReleaseDate],
      ['releaseType', (row) => row.releaseType],
      ['releaseSecondaryTypes', (row) => row.releaseSecondaryTypes],
      ['durationMs', (row) => row.durationMs],
+     ['bpm', (row) => row.bpm],
      ['explicit', (row) => row.explicit],
      ['trackNumber', (row) => row.trackNumber],
      ['discNumber', (row) => row.discNumber],
      ['isrc', (row) => row.isrc],
-     ['spotifyGenres', (row) => row.spotifyGenres],
+     ['deezerGenres', (row) => row.deezerGenres],
      ['musicbrainzGenres', (row) => row.wikiGenres],
      ['tags', (row) => row.tags],
-     ['spotifyUrl', (row) => row.spotifyUrl],
+     ['deezerUrl', (row) => row.deezerUrl],
      ['coverArt', (row) => row.coverArt],
      ['mbRecordingId', (row) => row.mbRecordingId],
      ['error', (row) => row.error || null]
@@ -71,7 +72,7 @@ function toJson(rows, summary) {
      return JSON.stringify(
           {
                exportedAt: new Date().toISOString(),
-               source: 'Musicalist (Spotify Web API + MusicBrainz)',
+               source: 'Musicalist (Deezer API + MusicBrainz)',
                summary: summary || null,
                songs: Array.isArray(rows) ? rows : []
           },

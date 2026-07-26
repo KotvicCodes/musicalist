@@ -163,7 +163,7 @@ function escapeQuery(value) {
 }
 
 //! Resolution
-// Preferred route: the ISRC from Spotify is an exact identifier, so it maps to
+// Preferred route: the ISRC from Deezer is an exact identifier, so it maps to
 // the right recording without any fuzzy matching.
 async function recordingIdFromIsrc(isrc) {
      const body = await request(`${API_BASE}/isrc/${encodeURIComponent(isrc)}?fmt=json`)

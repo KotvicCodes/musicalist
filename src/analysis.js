@@ -11,7 +11,7 @@
 
      //! Helpers
 
-     // Spotify serves whichever reissue it happens to carry, so its release date is
+     // Deezer serves whichever reissue it happens to carry, so its release date is
      // often decades late. MusicBrainz's original date wins when we have it.
      function effectiveYear(row) {
           const source = row.originalReleaseDate || (row.releaseDate && row.releaseDate[0])
@@ -71,15 +71,15 @@
           }
 
           //* Reissue drift
-          // How often, and by how much, Spotify's date is later than the original.
+          // How often, and by how much, Deezer's date is later than the original.
           let driftCount = 0
           let driftTotal = 0
           for (const row of found) {
                const original = yearOf(row.originalReleaseDate)
-               const spotify = yearOf(row.releaseDate && row.releaseDate[0])
-               if (original === null || spotify === null || original >= spotify) continue
+               const served = yearOf(row.releaseDate && row.releaseDate[0])
+               if (original === null || served === null || original >= served) continue
                driftCount += 1
-               driftTotal += spotify - original
+               driftTotal += served - original
           }
 
           //* Genres
@@ -108,6 +108,17 @@
                .filter((value) => typeof value === 'number' && value > 0)
           const meanDurationMs = durations.length
                ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length)
+               : null
+
+          //* BPM
+          // Deezer has not analysed every track, so the aggregate covers only the
+          // ones it has. bpmMissing is reported alongside so an average drawn from
+          // three of twenty songs is never mistaken for the whole list.
+          const tempos = found
+               .map((row) => row.bpm)
+               .filter((value) => typeof value === 'number' && value > 0)
+          const meanBpm = tempos.length
+               ? Math.round(tempos.reduce((sum, value) => sum + value, 0) / tempos.length)
                : null
 
           //* Explicit
@@ -140,6 +151,11 @@
                topGenres,
                meanDurationMs,
                medianDurationMs: median(durations),
+               meanBpm,
+               // Deezer reports a fractional tempo; whole numbers read better and
+               // the tenths carry no meaning to someone scanning a summary.
+               medianBpm: tempos.length ? Math.round(median(tempos)) : null,
+               bpmMissing: found.length - tempos.length,
                explicit: {
                     count: explicitCount,
                     ratio: rated.length ? explicitCount / rated.length : 0

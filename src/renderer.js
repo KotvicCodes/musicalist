@@ -3,8 +3,6 @@
 
 //! Constants
 const REPO_URL = 'https://github.com/KotvicCodes/musicalist#readme'
-const DASHBOARD_URL = 'https://developer.spotify.com/dashboard'
-const MARKET_KEY = 'musicalist.market'
 
 const { summarise, formatDuration } = window.MusicalistAnalysis
 const { escapeHtml, textToArray } = window.MusicalistText
@@ -20,15 +18,6 @@ const scrapeButtonQ = document.getElementById('scrapeButtonQ')
 const outputQ = document.getElementById('outputQ')
 const statusQ = document.getElementById('statusQ')
 
-const advancedQ = document.getElementById('advancedQ')
-const advancedButtonQ = document.getElementById('advancedButtonQ')
-const clientIdQ = document.getElementById('clientIdQ')
-const clientSecretQ = document.getElementById('clientSecretQ')
-const marketQ = document.getElementById('marketQ')
-const saveCredentialsQ = document.getElementById('saveCredentialsQ')
-const clearCredentialsQ = document.getElementById('clearCredentialsQ')
-const credentialsStatusQ = document.getElementById('credentialsStatusQ')
-
 const summaryQ = document.getElementById('summaryQ')
 const summaryStatsQ = document.getElementById('summaryStatsQ')
 const exportJsonQ = document.getElementById('exportJsonQ')
@@ -36,81 +25,10 @@ const exportCsvQ = document.getElementById('exportCsvQ')
 const exportStatusQ = document.getElementById('exportStatusQ')
 
 const helpButtonQ = document.getElementById('helpButtonQ')
-const dashboardLinkQ = document.getElementById('dashboardLinkQ')
-
-//! Advanced Settings
-
-//* Open settings
-advancedButtonQ.addEventListener('click', () => {
-     const open = advancedQ.classList.toggle('hidden') === false
-     advancedButtonQ.setAttribute('aria-expanded', String(open))
-})
-
-//* Market, remembered between sessions
-marketQ.value = localStorage.getItem(MARKET_KEY) ?? 'US'
-marketQ.addEventListener('change', () => {
-     localStorage.setItem(MARKET_KEY, marketQ.value)
-})
-
-//* Credentials
-// The secret is write-only from here: the main process reports that one exists
-// but never hands it back, so the field shows a placeholder instead.
-async function refreshCredentials() {
-     const stored = await window.electronAPI.getCredentials()
-     clientIdQ.value = stored.clientId || ''
-     clientSecretQ.value = ''
-     clientSecretQ.placeholder = stored.hasSecret ? '•••••••• saved' : ''
-
-     if (!stored.hasSecret) {
-          credentialsStatusQ.textContent = 'No credentials saved yet.'
-     } else if (stored.source === 'environment') {
-          credentialsStatusQ.textContent = 'Using credentials from your environment.'
-     } else if (stored.source === 'session') {
-          credentialsStatusQ.textContent = 'Saved for this session only.'
-     } else {
-          credentialsStatusQ.textContent = 'Credentials saved.'
-     }
-
-     return stored
-}
-
-saveCredentialsQ.addEventListener('click', async () => {
-     const clientId = clientIdQ.value.trim()
-     const clientSecret = clientSecretQ.value.trim()
-
-     if (!clientId || !clientSecret) {
-          credentialsStatusQ.textContent = 'Enter both a Client ID and a Client Secret.'
-          return
-     }
-
-     try {
-          const result = await window.electronAPI.setCredentials(clientId, clientSecret)
-          clientSecretQ.value = ''
-          clientSecretQ.placeholder = '•••••••• saved'
-          credentialsStatusQ.textContent = result.persisted
-               ? 'Credentials saved.'
-               : 'Saved for this session only: your system keychain is unavailable.'
-     } catch (err) {
-          credentialsStatusQ.textContent = err.message
-     }
-})
-
-clearCredentialsQ.addEventListener('click', async () => {
-     await window.electronAPI.clearCredentials()
-     await refreshCredentials()
-     credentialsStatusQ.textContent = 'Credentials forgotten.'
-})
-
-refreshCredentials()
 
 //! Links
 helpButtonQ.addEventListener('click', () => {
      window.electronAPI.openExternal(REPO_URL)
-})
-
-dashboardLinkQ.addEventListener('click', (event) => {
-     event.preventDefault()
-     window.electronAPI.openExternal(DASHBOARD_URL)
 })
 
 //! Lookup
@@ -139,7 +57,7 @@ scrapeButtonQ.addEventListener('click', async () => {
      statusQ.textContent = `Looking up ${songArray.length} song${songArray.length === 1 ? '' : 's'}…`
 
      try {
-          await window.electronAPI.runLookup(songArray, marketQ.value)
+          await window.electronAPI.runLookup(songArray)
           const missed = rows.filter((row) => !row.found).length
           statusQ.textContent = missed ? `Done. ${missed} not found.` : 'Done.'
      } catch (err) {
@@ -200,6 +118,16 @@ function renderSummary() {
           )
      }
 
+     if (summary.meanBpm) {
+          cell(
+               'Average BPM',
+               String(summary.meanBpm),
+               summary.bpmMissing
+                    ? `median ${summary.medianBpm}, ${summary.bpmMissing} unknown`
+                    : `median ${summary.medianBpm}`
+          )
+     }
+
      if (summary.topGenres.length) {
           const top = summary.topGenres[0]
           const runnersUp = summary.topGenres
@@ -232,7 +160,7 @@ function renderSummary() {
           cell(
                'Reissue drift',
                plural(summary.reissueDrift.count, 'song'),
-               `Spotify dates them ${summary.reissueDrift.averageYears} years late on average`
+               `Deezer dates them ${summary.reissueDrift.averageYears} years late on average`
           )
      }
 
@@ -248,17 +176,17 @@ function renderSong(song) {
      if (!song.found) {
           return `<article class="song song--missed">
                <h2 class="song__title">${text(song.query)}</h2>
-               <p class="song__note">${song.error ? `Failed: ${escapeHtml(song.error)}` : 'Not found on Spotify.'}</p>
+               <p class="song__note">${song.error ? `Failed: ${escapeHtml(song.error)}` : 'Not found on Deezer.'}</p>
           </article>`
      }
 
-     // Spotify's date is the release it happens to serve, so show the original
+     // Deezer's date is the release it happens to serve, so show the original
      // alongside it whenever MusicBrainz disagrees.
-     const spotifyDate = (song.releaseDate || [])[0]
+     const deezerDate = (song.releaseDate || [])[0]
      const released =
-          song.originalReleaseDate && song.originalReleaseDate !== spotifyDate
-               ? `${text(song.originalReleaseDate)} <span class="song__aside">(Spotify: ${text(spotifyDate)})</span>`
-               : text(spotifyDate || song.originalReleaseDate)
+          song.originalReleaseDate && song.originalReleaseDate !== deezerDate
+               ? `${text(song.originalReleaseDate)} <span class="song__aside">(Deezer: ${text(deezerDate)})</span>`
+               : text(deezerDate || song.originalReleaseDate)
 
      const albumLine = [
           song.album,
@@ -275,8 +203,9 @@ function renderSong(song) {
                <dt>Album</dt><dd>${text(albumLine)}</dd>
                <dt>Released</dt><dd>${released}</dd>
                <dt>Length</dt><dd>${text(formatDuration(song.durationMs))}</dd>
+               <dt>BPM</dt><dd>${text(song.bpm === null || song.bpm === undefined ? null : Math.round(song.bpm))}</dd>
                <dt>Genres</dt><dd>${list(song.wikiGenres)}</dd>
-               <dt>Spotify genres</dt><dd>${list(song.spotifyGenres)}</dd>
+               <dt>Deezer genres</dt><dd>${list(song.deezerGenres)}</dd>
                <dt>Tags</dt><dd>${list(song.tags)}</dd>
                <dt>ISRC</dt><dd>${text(song.isrc)}</dd>
           </dl>

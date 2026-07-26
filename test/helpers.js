@@ -1,4 +1,5 @@
-//
+// SPDX-FileCopyrightText: 2025-2026 Kotvič
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 //! Fake Responses
 // Minimal stand-in for the parts of the fetch Response the code touches.

@@ -21,6 +21,13 @@ const NO_DATA_CODE = 800
 // Deezer uses this for "release date unknown" rather than omitting the field.
 const NULL_DATE = '0000-00-00'
 
+// Node's fetch has no timeout of its own, so a socket that opens and then goes
+// quiet never settles. That would wedge the queue below forever and leave the
+// run with no exit but quitting the app. A timeout fails only its own song
+// rather than the run, because one slow answer is not a dead connection; a
+// genuinely dead one is what the Stop button is for.
+const REQUEST_TIMEOUT_MS = 15000
+
 //! Errors
 // `kind` lets callers tell a dead connection apart from one bad song without
 // ever echoing a response body to the screen.
@@ -35,6 +42,12 @@ class DeezerError extends Error {
 
 //! Helpers
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// An aborted fetch and an aborted body read both surface as the signal's own
+// reason, so the two call sites ask the same question.
+function isTimeout(err) {
+    return err && (err.name === 'TimeoutError' || err.name === 'AbortError')
+}
 
 //! Throttle
 // A private queue, deliberately not shared with MusicBrainz: the two services
@@ -63,14 +76,21 @@ function throttled(task) {
 // Returns the parsed body, or null when Deezer knows nothing about the id.
 // Anything else throws, so the caller can decide whether to fail the song or
 // the whole run.
-// `quotaWaitMs` is overridable only so the retry path can be tested without
-// sleeping through a real quota window; nothing in the app passes it.
-async function request(path, { attempt = 1, quotaWaitMs = QUOTA_WAIT_MS } = {}) {
+// `quotaWaitMs` and `timeoutMs` are overridable only so the retry and timeout
+// paths can be tested without sleeping through a real quota window or a real
+// deadline; nothing in the app passes either.
+async function request(
+    path,
+    { attempt = 1, quotaWaitMs = QUOTA_WAIT_MS, timeoutMs = REQUEST_TIMEOUT_MS } = {}
+) {
     const body = await throttled(async () => {
         let response
         try {
-            response = await fetch(`${API_BASE}${path}`)
-        } catch {
+            response = await fetch(`${API_BASE}${path}`, { signal: AbortSignal.timeout(timeoutMs) })
+        } catch (err) {
+            if (isTimeout(err)) {
+                throw new DeezerError('Deezer did not answer in time.', { kind: 'timeout' })
+            }
             throw new DeezerError('Could not reach Deezer. Check your internet connection.', {
                 kind: 'network'
             })
@@ -82,9 +102,14 @@ async function request(path, { attempt = 1, quotaWaitMs = QUOTA_WAIT_MS } = {}) 
             })
         }
 
+        // The signal covers the body stream too, so a response that starts and
+        // then stalls mid-download lands here rather than hanging.
         try {
             return await response.json()
-        } catch {
+        } catch (err) {
+            if (isTimeout(err)) {
+                throw new DeezerError('Deezer did not answer in time.', { kind: 'timeout' })
+            }
             throw new DeezerError('Deezer sent a response this app could not read.')
         }
     })
@@ -103,7 +128,7 @@ async function request(path, { attempt = 1, quotaWaitMs = QUOTA_WAIT_MS } = {}) 
             })
         }
         await sleep(quotaWaitMs)
-        return request(path, { attempt: attempt + 1, quotaWaitMs })
+        return request(path, { attempt: attempt + 1, quotaWaitMs, timeoutMs })
     }
 
     throw new DeezerError(`Deezer rejected the request (${error.type || 'error'}).`)

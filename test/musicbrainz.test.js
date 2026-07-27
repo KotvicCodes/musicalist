@@ -12,7 +12,7 @@ const {
     escapeQuery,
     rankNamed
 } = require('../src/api/musicbrainz.js')
-const { response, stubFetch } = require('./helpers.js')
+const { response, stubFetch, timeoutError } = require('./helpers.js')
 
 //! Fixtures
 const releaseGroup = (overrides = {}) => ({
@@ -413,4 +413,32 @@ test('a failed request does not stall later ones', async (t) => {
     const second = await enrich({ isrc: 'GBUM71029604', title: 'Bohemian Rhapsody', artist: 'Queen' })
 
     assert.equal(second.mbRecordingId, 'rec-1')
+})
+
+//! Deadlines
+test('sends a deadline with every request', async (t) => {
+    const fetch = stubFetch((url) => {
+        if (url.includes('/isrc/')) return response({ recordings: [{ id: 'rec-1' }] })
+        return response(recording())
+    })
+    t.after(fetch.restore)
+
+    await enrich({ isrc: 'GBUM71029604', title: 'Bohemian Rhapsody', artist: 'Queen' })
+
+    assert.ok(fetch.calls.length > 0)
+    for (const call of fetch.calls) {
+        assert.ok(call.options.signal instanceof AbortSignal)
+    }
+})
+
+test('a stalled MusicBrainz costs genres, not the song', async (t) => {
+    const fetch = stubFetch(() => {
+        throw timeoutError()
+    })
+    t.after(fetch.restore)
+
+    const result = await enrich({ isrc: 'GBUM71029604', title: 'Bohemian Rhapsody', artist: 'Queen' })
+
+    assert.equal(result.mbRecordingId, null)
+    assert.deepEqual(result.wikiGenres, [])
 })

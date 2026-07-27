@@ -5,7 +5,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 
 const { features, extractFeatures, emptyFeatures } = require('../src/api/acousticbrainz.js')
-const { response, stubFetch } = require('./helpers.js')
+const { response, stubFetch, timeoutError } = require('./helpers.js')
 
 //! Fixtures
 // A two-class classifier as the archive actually returns it: `all` holds both
@@ -124,4 +124,24 @@ test('skips the request entirely when there is no recording id', async (t) => {
 
     assert.deepEqual(await features(null), emptyFeatures())
     assert.equal(fetch.calls.length, 0)
+})
+
+//! Deadlines
+test('sends a deadline with the request', async (t) => {
+    const fetch = stubFetch(() => response(highlevel()))
+    t.after(fetch.restore)
+
+    await features('rec-1')
+
+    assert.equal(fetch.calls.length, 1)
+    assert.ok(fetch.calls[0].options.signal instanceof AbortSignal)
+})
+
+test('a stalled archive costs mood, not the song', async (t) => {
+    const fetch = stubFetch(() => {
+        throw timeoutError()
+    })
+    t.after(fetch.restore)
+
+    assert.deepEqual(await features('rec-1'), emptyFeatures())
 })

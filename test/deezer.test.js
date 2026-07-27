@@ -5,7 +5,14 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 
 const { createClient, mapTrack, request, DeezerError } = require('../src/api/deezer.js')
-const { response, stubFetch, deezerHit, deezerTrack, deezerAlbum } = require('./helpers.js')
+const {
+    response,
+    stubFetch,
+    stubHangingFetch,
+    deezerHit,
+    deezerTrack,
+    deezerAlbum
+} = require('./helpers.js')
 
 //! Helpers
 // Routes the three endpoints a single search touches. Any of them can be told
@@ -254,4 +261,56 @@ test('reports an HTTP failure with its status', async (t) => {
     t.after(fetch.restore)
 
     await assert.rejects(() => createClient().searchTrack('Anything'), { status: 503 })
+})
+
+//! Deadlines
+// A connection that opens and then goes quiet is the one failure no status code
+// describes, and the one Node's fetch will wait on forever.
+test('gives up on a request that is accepted and then never answered', async (t) => {
+    const fetch = stubHangingFetch()
+    t.after(fetch.restore)
+
+    await assert.rejects(() => request('/track/42', { timeoutMs: 300 }), { kind: 'timeout' })
+})
+
+test('treats a stalled request as one bad song, not a dead connection', async (t) => {
+    const fetch = stubHangingFetch()
+    t.after(fetch.restore)
+
+    // 'network' is the kind that aborts the whole run. A slow answer is not
+    // grounds for that, so a deadline must report something else.
+    await assert.rejects(
+        () => request('/track/42', { timeoutMs: 300 }),
+        (err) => {
+            assert.notEqual(err.kind, 'network')
+            return true
+        }
+    )
+})
+
+test('sends a deadline with every request', async (t) => {
+    const fetch = stubDeezer()
+    t.after(fetch.restore)
+
+    await createClient().searchTrack('Bohemian Rhapsody')
+
+    assert.ok(fetch.calls.length > 0)
+    for (const call of fetch.calls) {
+        assert.ok(call.options.signal instanceof AbortSignal)
+    }
+})
+
+test('carries the deadline into a quota retry', async (t) => {
+    let attempts = 0
+    const fetch = stubFetch((_url, options) => {
+        attempts += 1
+        assert.ok(options.signal instanceof AbortSignal)
+        if (attempts === 1) return response({ error: { type: 'Exception', code: 4 } })
+        return response(deezerTrack())
+    })
+    t.after(fetch.restore)
+
+    await request('/track/42', { quotaWaitMs: 0 })
+
+    assert.equal(attempts, 2)
 })

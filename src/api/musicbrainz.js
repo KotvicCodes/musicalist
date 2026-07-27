@@ -12,6 +12,11 @@ const { version } = require('../../package.json')
 const USER_AGENT = `Musicalist/${version} ( https://github.com/KotvicCodes/Musicalist )`
 const MIN_GAP_MS = 1100
 
+// Node's fetch never times out on its own, and a stalled request here would hold
+// the queue below shut for every remaining song. A song without genres is still
+// a useful row, so the deadline degrades to null like any other failure.
+const REQUEST_TIMEOUT_MS = 15000
+
 // A recording lookup with these includes returns genres, tags and the parent
 // release groups in a single response, so no follow-up call is needed.
 const RECORDING_INC = 'genres+tags+releases+release-groups'
@@ -53,7 +58,8 @@ async function request(url) {
     return throttled(async () => {
         try {
             const response = await fetch(url, {
-                headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' }
+                headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+                signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
             })
             if (!response.ok) return null
             return await response.json()

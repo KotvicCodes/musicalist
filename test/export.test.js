@@ -33,6 +33,49 @@ test('quotes cells containing a comma, a quote or a newline', () => {
     assert.equal(escapeCell('Line\nBreak'), '"Line\nBreak"')
 })
 
+//! Formula Injection
+// MusicBrainz tags and genres are community editable and land in this file
+// unaltered, so a tag is an input to whatever spreadsheet opens it.
+test('defuses a cell a spreadsheet would evaluate as a formula', () => {
+    // quoting still applies on top, since this one carries commas and quotes
+    assert.equal(
+        escapeCell('=HYPERLINK("http://evil","Play")'),
+        '"\'=HYPERLINK(""http://evil"",""Play"")"'
+    )
+    assert.equal(escapeCell('+1+1'), "'+1+1")
+    assert.equal(escapeCell('@SUM(A1:A9)'), "'@SUM(A1:A9)")
+    assert.equal(escapeCell("-2+3+cmd|' /c calc'!A0"), "'-2+3+cmd|' /c calc'!A0")
+})
+
+test('defuses a formula smuggled in through a genre list', () => {
+    assert.equal(escapeCell(['=1+1', 'rock']), "'=1+1; rock")
+})
+
+test('defuses leading whitespace a spreadsheet would skip past', () => {
+    assert.equal(escapeCell('\t=1+1'), "'\t=1+1")
+    assert.equal(escapeCell('\r=1+1'), '"\'\r=1+1"')
+})
+
+test('leaves a negative number usable as a number', () => {
+    // gain is reported in negative decibels, so quoting these would turn a real
+    // column into text and break any sum drawn from it.
+    assert.equal(escapeCell(-8.2), '-8.2')
+    assert.equal(escapeCell('-12'), '-12')
+})
+
+test('still defuses text that merely opens like a negative number', () => {
+    assert.equal(escapeCell('-Ame-'), "'-Ame-")
+    assert.equal(escapeCell('-1+1'), "'-1+1")
+})
+
+test('a defused cell survives the round trip through a row', () => {
+    const csv = toCsv([songRow({ tags: ['=1+1'], title: '@Home' })])
+    const row = lines(csv)[1]
+
+    assert.ok(row.includes("'=1+1"))
+    assert.ok(row.includes("'@Home"))
+})
+
 //! CSV
 test('writes a header row matching the column list', () => {
     const [header] = lines(toCsv([]))

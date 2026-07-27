@@ -29,6 +29,19 @@ const NO_DATA_CODE = 800
 // Deezer uses this for "release date unknown" rather than omitting the field.
 const NULL_DATE = '0000-00-00'
 
+// The boolean `explicit_lyrics` folds "nobody has said" into "no". This is the
+// field that keeps them apart, so an unrated track stops counting as clean.
+const EXPLICIT_CONTENT = {
+    0: 'clean',
+    1: 'explicit',
+    2: 'unknown',
+    3: 'edited',
+    4: 'partially explicit',
+    5: 'partially unknown',
+    6: 'unrated',
+    7: 'partially unrated'
+}
+
 // Node's fetch has no timeout of its own, so a socket that opens and then goes
 // quiet never settles. That would wedge the queue below forever and leave the
 // run with no exit but quitting the app. A timeout fails only its own song
@@ -162,7 +175,8 @@ function cleanDate(value) {
 
 // The track detail carries a `contributors` list covering features and
 // collaborations; the leaner search result only has a single `artist`. One
-// artist can appear twice under two roles, so dedupe on the way through.
+// artist can appear twice under two roles, so dedupe on the way through and
+// keep the first role, which is the primary credit.
 function creditedArtists(track) {
     const source =
         Array.isArray(track.contributors) && track.contributors.length
@@ -178,7 +192,14 @@ function creditedArtists(track) {
         const key = artist.id ?? artist.name
         if (seen.has(key)) continue
         seen.add(key)
-        artists.push({ name: artist.name, id: artist.id ?? null, url: artist.link || null })
+        artists.push({
+            name: artist.name,
+            id: artist.id ?? null,
+            url: artist.link || null,
+            // Main or Featured. Read but previously discarded, which left the
+            // app unable to tell a lead artist from a guest.
+            role: artist.role || null
+        })
     }
     return artists
 }
@@ -209,10 +230,27 @@ function mapTrack(track, album) {
         explicit: typeof track.explicit_lyrics === 'boolean' ? track.explicit_lyrics : null,
         trackNumber: typeof track.track_position === 'number' ? track.track_position : null,
         discNumber: typeof track.disk_number === 'number' ? track.disk_number : null,
+        // Deezer's four-value rating, where the boolean above cannot tell an
+        // unrated track apart from a clean one.
+        explicitLyrics: EXPLICIT_CONTENT[track.explicit_content_lyrics] || null,
         isrc: track.isrc || null,
         deezerUrl: track.link || null,
         // 0 is Deezer's "not analysed", not a track that stands still
         bpm: typeof track.bpm === 'number' && track.bpm > 0 ? track.bpm : null,
+        // Deezer's own popularity score, 0 to 1,000,000. The only axis in the
+        // app that says how widely known a song is rather than what it sounds
+        // like, which is what separates a deep cut from a single.
+        popularity: typeof track.rank === 'number' ? track.rank : null,
+        // ReplayGain in decibels, so negative, and larger negatives mean a
+        // louder master. This is measured rather than classified, which makes
+        // it the one honest answer to the energy question AcousticBrainz
+        // cannot answer, and across a list it reads as loudness war era.
+        gainDb: typeof track.gain === 'number' ? track.gain : null,
+        previewUrl: track.preview || null,
+        // The label that put the record out. Absent from the app until now, and
+        // label concentration is one of the more telling things about a list.
+        label: detail.label || null,
+        upc: detail.upc || null,
         deezerGenres: Array.isArray(detail.genres && detail.genres.data)
             ? detail.genres.data.map((genre) => genre && genre.name).filter(Boolean)
             : [],

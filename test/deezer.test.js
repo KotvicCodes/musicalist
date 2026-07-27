@@ -379,3 +379,69 @@ test('carries the deadline into a quota retry', async (t) => {
 
     assert.equal(attempts, 2)
 })
+
+//! Fields Already In The Payload
+// Each of these arrived in a response the app was already paying for and was
+// being thrown away.
+test('keeps the popularity score and the measured gain', () => {
+    const mapped = mapTrack(deezerTrack(), deezerAlbum())
+
+    assert.equal(mapped.popularity, 892_145)
+    assert.equal(mapped.gainDb, -8.2)
+})
+
+test('treats a missing rank or gain as unknown, not as zero', () => {
+    // 0 is a real gain and a real rank, so a gap filled with it would be
+    // indistinguishable from a track that measured there.
+    const mapped = mapTrack(deezerTrack({ rank: undefined, gain: undefined }), deezerAlbum())
+
+    assert.equal(mapped.popularity, null)
+    assert.equal(mapped.gainDb, null)
+})
+
+test('keeps a gain of zero, which is a real measurement', () => {
+    assert.equal(mapTrack(deezerTrack({ gain: 0 }), deezerAlbum()).gainDb, 0)
+})
+
+test('reads the label and barcode off the album', () => {
+    const mapped = mapTrack(deezerTrack(), deezerAlbum())
+
+    assert.equal(mapped.label, 'EMI')
+    assert.equal(mapped.upc, '0602527664972')
+})
+
+test('tells an unrated track apart from a clean one', () => {
+    // the boolean folds both into false, which is what this field is for
+    assert.equal(mapTrack(deezerTrack({ explicit_content_lyrics: 0 })).explicitLyrics, 'clean')
+    assert.equal(mapTrack(deezerTrack({ explicit_content_lyrics: 1 })).explicitLyrics, 'explicit')
+    assert.equal(mapTrack(deezerTrack({ explicit_content_lyrics: 2 })).explicitLyrics, 'unknown')
+    assert.equal(mapTrack(deezerTrack({ explicit_content_lyrics: 3 })).explicitLyrics, 'edited')
+})
+
+test('keeps the role that says which artist led', () => {
+    const mapped = mapTrack(
+        deezerTrack({
+            contributors: [
+                { id: 1, name: 'Queen', role: 'Main' },
+                { id: 2, name: 'David Bowie', role: 'Featured' }
+            ]
+        })
+    )
+
+    assert.equal(mapped.artists[0].role, 'Main')
+    assert.equal(mapped.artists[1].role, 'Featured')
+})
+
+test('keeps the first role when one artist is credited twice', () => {
+    const mapped = mapTrack(
+        deezerTrack({
+            contributors: [
+                { id: 1, name: 'Queen', role: 'Main' },
+                { id: 1, name: 'Queen', role: 'Featured' }
+            ]
+        })
+    )
+
+    assert.equal(mapped.artists.length, 1)
+    assert.equal(mapped.artists[0].role, 'Main')
+})

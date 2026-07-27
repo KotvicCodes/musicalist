@@ -5,6 +5,7 @@
 const { createClient } = require('./deezer.js')
 const musicbrainz = require('./musicbrainz.js')
 const acousticbrainz = require('./acousticbrainz.js')
+const listenbrainz = require('./listenbrainz.js')
 
 //! Duration Cross-check
 // A studio original and a live take of the same song rarely agree within a few
@@ -68,7 +69,11 @@ function blankRow(query) {
         coverArtUrl: null,
         durationGapMs: null,
         durationDisagrees: null,
+        listenCount: null,
+        listenerCount: null,
+        bpmSource: null,
         mbRecordingId: null,
+        ...acousticbrainz.emptyAnalysis(),
         // How well Deezer's answer matched the query, so a shaky match is
         // visible as one rather than presented like any other row.
         matchScore: null,
@@ -104,14 +109,52 @@ async function lookupSong(deezer, query, signal) {
     // out. It returns nulls rather than throwing, so it cannot fail a row.
     const audio = await acousticbrainz.features(enrichment.mbRecordingId, signal)
 
+    // The measured half of the archive costs a second request, so it is only
+    // worth asking once the high-level answer has confirmed there is anything
+    // to ask about. The archive returns every classifier together or none at
+    // all, so one field standing in for the rest is enough to tell.
+    const measured =
+        audio.danceability !== null
+            ? await acousticbrainz.analysis(enrichment.mbRecordingId, signal)
+            : acousticbrainz.emptyAnalysis()
+
     return {
         ...blankRow(query),
         ...track,
         found: true,
         ...enrichment,
         ...audio,
-        ...compareDurations(track.durationMs, enrichment.mbDurationMs)
+        ...measured,
+        ...compareDurations(track.durationMs, enrichment.mbDurationMs),
+        // Deezer has no tempo for every track and the archive analysed its own,
+        // so a gap in one is often filled by the other. Deezer wins where both
+        // have a number, because it covers far more of a typical list, and the
+        // source is recorded rather than left to be guessed at.
+        bpm: track.bpm ?? measured.archiveBpm ?? null,
+        bpmSource: track.bpm ? 'deezer' : measured.archiveBpm ? 'acousticbrainz' : null
     }
+}
+
+//! Popularity
+// One request for the whole run rather than one per song, which is why it lands
+// after the loop rather than inside it. Rows are amended in place and returned,
+// so the streamed view is finalised once at the end.
+async function addPopularity(rows, signal) {
+    if (signal && signal.aborted) return rows
+
+    const ids = rows.map((row) => row.mbRecordingId).filter(Boolean)
+    if (ids.length === 0) return rows
+
+    const counts = await listenbrainz.popularity(ids, signal)
+    for (const row of rows) {
+        const entry = counts.get(row.mbRecordingId)
+        if (!entry) continue
+
+        row.listenCount = entry.listenCount
+        row.listenerCount = entry.listenerCount
+    }
+
+    return rows
 }
 
 //! Run
@@ -147,8 +190,8 @@ async function lookupSongs(songs, { onProgress, signal } = {}) {
         if (typeof onProgress === 'function') onProgress(row)
     }
 
-    return rows
+    return addPopularity(rows, signal)
 }
 
 //! Export
-module.exports = { lookupSongs, lookupSong, blankRow, compareDurations }
+module.exports = { lookupSongs, lookupSong, blankRow, compareDurations, addPopularity }

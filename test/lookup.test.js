@@ -10,10 +10,23 @@ const { response, stubFetch, deezerHit, deezerTrack, deezerAlbum } = require('./
 //! Helpers
 // One stub covering both services, so a run can be driven end to end. Songs are
 // keyed by the query they are found under.
-function stubEverything({ tracks = {}, mbDown = false, audio = null } = {}) {
+function stubEverything({ tracks = {}, mbDown = false, audio = null, listens = 0 } = {}) {
     return stubFetch((url) => {
+        if (url.includes('api.listenbrainz.org')) {
+            if (!listens) return response([])
+            return response([
+                { recording_mbid: 'rec-1', total_listen_count: listens, total_user_count: 12 }
+            ])
+        }
+
         if (url.includes('acousticbrainz.org')) {
             if (!audio) return response({ message: 'Not found' }, { status: 404 })
+            if (url.includes('/low-level')) {
+                return response({
+                    tonal: { key_key: 'B', key_scale: 'flat', key_strength: 0.7 },
+                    rhythm: { bpm: 143.2 }
+                })
+            }
             return response({
                 highlevel: {
                     danceability: {
@@ -324,4 +337,88 @@ test('says nothing at all when either side has no duration', () => {
         durationDisagrees: null
     })
     assert.deepEqual(compareDurations(0, 354_000), { durationGapMs: null, durationDisagrees: null })
+})
+
+//! Musical Key
+test('asks the archive for the measured analysis once it knows there is one', async (t) => {
+    const fetch = stubEverything({ tracks: { Bohemian: deezerTrack() }, audio: { danceable: 0.82 } })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian'])
+
+    assert.equal(row.musicalKey, 'B flat')
+    assert.ok(fetch.calls.some((call) => call.url.includes('/rec-1/low-level')))
+})
+
+test('does not pay for a low-level call the archive cannot answer', async (t) => {
+    // The archive returns every classifier together or none at all, so a miss
+    // on the high-level call means the second request is wasted.
+    const fetch = stubEverything({ tracks: { Bohemian: deezerTrack() } })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian'])
+
+    assert.equal(row.musicalKey, null)
+    assert.ok(!fetch.calls.some((call) => call.url.includes('/low-level')))
+})
+
+test('falls back to the archive tempo only where Deezer has none', async (t) => {
+    const fetch = stubEverything({
+        tracks: { Bohemian: deezerTrack({ bpm: 0 }) },
+        audio: { danceable: 0.82 }
+    })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian'])
+
+    assert.equal(row.bpm, 143.2)
+    assert.equal(row.bpmSource, 'acousticbrainz')
+})
+
+test('prefers Deezer tempo where both have one, and says so', async (t) => {
+    const fetch = stubEverything({ tracks: { Bohemian: deezerTrack() }, audio: { danceable: 0.82 } })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian'])
+
+    assert.equal(row.bpm, 143.9)
+    assert.equal(row.bpmSource, 'deezer')
+})
+
+//! Popularity
+test('fetches popularity once for the whole run and merges it in', async (t) => {
+    const fetch = stubEverything({
+        tracks: { Bohemian: deezerTrack(), Another: deezerTrack({ id: 43, title: 'Another' }) },
+        listens: 91_204
+    })
+    t.after(fetch.restore)
+
+    const rows = await lookupSongs(['Bohemian', 'Another'])
+    const calls = fetch.calls.filter((call) => call.url.includes('api.listenbrainz.org'))
+
+    assert.equal(calls.length, 1)
+    assert.equal(rows[0].listenCount, 91_204)
+    assert.equal(rows[0].listenerCount, 12)
+})
+
+test('a popularity outage costs the counts, not the run', async (t) => {
+    const fetch = stubFetch((url) => {
+        if (url.includes('api.listenbrainz.org')) throw new Error('ECONNRESET')
+        if (url.includes('acousticbrainz.org')) return response({}, { status: 404 })
+        if (url.includes('api.deezer.com')) {
+            if (url.includes('/search')) {
+                return response({ data: [deezerHit({ title: 'Bohemian Rhapsody' })] })
+            }
+            if (url.includes('/track/')) return response(deezerTrack())
+            return response(deezerAlbum())
+        }
+        if (url.includes('/isrc/')) return response({ recordings: [{ id: 'rec-1' }] })
+        return response({ id: 'rec-1', genres: [], tags: [], releases: [] })
+    })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian Rhapsody'])
+
+    assert.equal(row.found, true)
+    assert.equal(row.listenCount, null)
 })

@@ -13,6 +13,11 @@ const USER_AGENT = `Musicalist/${version} ( https://github.com/KotvicCodes/Music
 // binds; it exists so a future caller cannot accidentally hammer the service.
 const MIN_GAP_MS = 250
 
+// Same reasoning as the other two clients: Node's fetch has no deadline of its
+// own, and mood is the most optional data in the app, so a slow answer should
+// cost the row its mood rather than cost the run its progress.
+const REQUEST_TIMEOUT_MS = 10000
+
 // Every classifier is a two-class model, and `all` carries the probability of
 // each class by name. Reading the positive class straight out of `all` is what
 // keeps the sign honest: the sibling `probability` field is confidence in
@@ -72,7 +77,8 @@ async function request(url) {
     return throttled(async () => {
         try {
             const response = await fetch(url, {
-                headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' }
+                headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+                signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
             })
             if (!response.ok) return null
             return await response.json()

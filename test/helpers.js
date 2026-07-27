@@ -35,6 +35,59 @@ function stubFetch(handler) {
     }
 }
 
+//! Hanging Fetch Stub
+// A server that accepts the connection and then says nothing, which is the case
+// no status code and no thrown error can describe. Rejects with the signal's own
+// reason once the deadline fires, exactly as the real fetch does.
+//
+// The ceiling is not a second deadline to test against, it is the thing keeping
+// Node's event loop alive. A real pending request holds an open socket;
+// AbortSignal.timeout's own timer is unref'd and holds nothing, so without a
+// handle here the loop drains and the runner cancels the test before the very
+// deadline it is meant to be proving ever fires. It is set far past any deadline
+// under test, so reaching it means no deadline was attached at all.
+const NEVER_ANSWERED_CEILING_MS = 5000
+
+function stubHangingFetch() {
+    const original = globalThis.fetch
+    const calls = []
+
+    globalThis.fetch = async (url, options = {}) => {
+        calls.push({ url: String(url), options, at: Date.now() })
+        return new Promise((_resolve, reject) => {
+            const ceiling = setTimeout(
+                () => reject(new Error('no deadline ever fired on this request')),
+                NEVER_ANSWERED_CEILING_MS
+            )
+            const fail = (reason) => {
+                clearTimeout(ceiling)
+                reject(reason)
+            }
+
+            const { signal } = options
+            if (!signal) return
+            // The throttle can hold a request back longer than its own deadline,
+            // in which case the signal is already spent by the time fetch sees
+            // it. Real fetch rejects straight away rather than waiting for an
+            // abort event that has already been and gone.
+            if (signal.aborted) return fail(signal.reason)
+            signal.addEventListener('abort', () => fail(signal.reason), { once: true })
+        })
+    }
+
+    return {
+        calls,
+        restore: () => {
+            globalThis.fetch = original
+        }
+    }
+}
+
+// What fetch rejects with when its deadline fires.
+function timeoutError() {
+    return new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+}
+
 //! Fixtures
 
 // What GET /search returns per hit: no bpm, no release date, one artist only.
@@ -119,4 +172,13 @@ function songRow(overrides = {}) {
     }
 }
 
-module.exports = { response, stubFetch, deezerHit, deezerTrack, deezerAlbum, songRow }
+module.exports = {
+    response,
+    stubFetch,
+    stubHangingFetch,
+    timeoutError,
+    deezerHit,
+    deezerTrack,
+    deezerAlbum,
+    songRow
+}

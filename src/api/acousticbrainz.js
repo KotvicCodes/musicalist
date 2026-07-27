@@ -73,12 +73,15 @@ function throttled(task) {
 // useful row, so every failure resolves to null instead of throwing. A 404 is
 // the ordinary case here rather than an error, since the archive only holds
 // what volunteers submitted before it closed to new data.
-async function request(url) {
+async function request(url, signal) {
     return throttled(async () => {
         try {
+            // The run's own signal and this request's deadline both have to be
+            // able to end the call, so they are combined into one.
+            const deadline = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
             const response = await fetch(url, {
                 headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
-                signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+                signal: signal ? AbortSignal.any([signal, deadline]) : deadline
             })
             if (!response.ok) return null
             return await response.json()
@@ -128,10 +131,10 @@ function extractFeatures(body) {
 // resolved, so this costs one request and no extra matching. Picking the wrong
 // recording upstream is not a soft failure here: a remaster and its original
 // are separate IDs, and the archive almost always holds only the original.
-async function features(mbRecordingId) {
+async function features(mbRecordingId, signal) {
     if (!mbRecordingId) return emptyFeatures()
 
-    const body = await request(`${API_BASE}/${encodeURIComponent(mbRecordingId)}/high-level`)
+    const body = await request(`${API_BASE}/${encodeURIComponent(mbRecordingId)}/high-level`, signal)
     return extractFeatures(body)
 }
 

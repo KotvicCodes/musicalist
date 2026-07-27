@@ -54,12 +54,15 @@ function throttled(task) {
 //! Request
 // MusicBrainz failures are never fatal here: a song without genres is still a
 // useful row, so callers get null instead of an exception.
-async function request(url) {
+async function request(url, signal) {
     return throttled(async () => {
         try {
+            // The run's own signal and this request's deadline both have to be
+            // able to end the call, so they are combined into one.
+            const deadline = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
             const response = await fetch(url, {
                 headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
-                signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+                signal: signal ? AbortSignal.any([signal, deadline]) : deadline
             })
             if (!response.ok) return null
             return await response.json()
@@ -204,33 +207,33 @@ function pickRecording(recordings) {
 // order. Taking the first entry therefore dated "Smells Like Teen Spirit" to the
 // 2021 remaster, which also carries none of the genres the 1991 recording has,
 // so the same ranking the search path uses picks between them.
-async function recordingIdFromIsrc(isrc) {
-    const body = await request(`${API_BASE}/isrc/${encodeURIComponent(isrc)}?fmt=json`)
+async function recordingIdFromIsrc(isrc, signal) {
+    const body = await request(`${API_BASE}/isrc/${encodeURIComponent(isrc)}?fmt=json`, signal)
     return pickRecording(body && body.recordings)
 }
 
 // Fallback for tracks with no ISRC, or an ISRC MusicBrainz has never seen.
-async function recordingIdFromSearch(title, artist) {
+async function recordingIdFromSearch(title, artist, signal) {
     if (!title) return null
 
     const parts = [`recording:"${escapeQuery(title)}"`]
     if (artist) parts.push(`artist:"${escapeQuery(artist)}"`)
 
     const params = new URLSearchParams({ fmt: 'json', limit: '25', query: parts.join(' AND ') })
-    const body = await request(`${API_BASE}/recording?${params}`)
+    const body = await request(`${API_BASE}/recording?${params}`, signal)
     return pickRecording(body && body.recordings)
 }
 
 //! Public Lookup
 // Two throttled requests per song: resolve the recording, then fetch it with
 // everything included.
-async function enrich({ isrc, title, artist }) {
+async function enrich({ isrc, title, artist, signal }) {
     let id = null
-    if (isrc) id = await recordingIdFromIsrc(isrc)
-    if (!id) id = await recordingIdFromSearch(title, artist)
+    if (isrc) id = await recordingIdFromIsrc(isrc, signal)
+    if (!id) id = await recordingIdFromSearch(title, artist, signal)
     if (!id) return extractRecording(null)
 
-    const recording = await request(`${API_BASE}/recording/${id}?fmt=json&inc=${RECORDING_INC}`)
+    const recording = await request(`${API_BASE}/recording/${id}?fmt=json&inc=${RECORDING_INC}`, signal)
     return extractRecording(recording)
 }
 

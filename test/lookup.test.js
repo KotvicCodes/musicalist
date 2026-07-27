@@ -230,3 +230,64 @@ test('a blank row carries the audio fields too, so every row is the same shape',
     assert.equal('instrumental' in row, true)
     assert.equal(row.danceability, null)
 })
+
+//! Stopping
+// The signal is checked between songs and passed down into the requests, so a
+// stop lands without waiting out whatever was in flight.
+test('stops between songs and keeps what it already had', async (t) => {
+    const fetch = stubEverything({
+        tracks: { One: { id: 1 }, Two: { id: 2 }, Three: { id: 3 } }
+    })
+    t.after(fetch.restore)
+
+    const controller = new AbortController()
+    const rows = await lookupSongs(['One', 'Two', 'Three'], {
+        signal: controller.signal,
+        onProgress: () => controller.abort()
+    })
+
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0].found, true)
+})
+
+test('emits nothing at all for a run stopped before it started', async (t) => {
+    const fetch = stubEverything({ tracks: { One: { id: 1 } } })
+    t.after(fetch.restore)
+
+    const controller = new AbortController()
+    controller.abort()
+
+    const seen = []
+    const rows = await lookupSongs(['One'], {
+        signal: controller.signal,
+        onProgress: (row) => seen.push(row)
+    })
+
+    assert.deepEqual(rows, [])
+    assert.deepEqual(seen, [])
+    assert.equal(fetch.calls.length, 0)
+})
+
+test('a stopped request does not leave a row blaming the song', async (t) => {
+    const controller = new AbortController()
+
+    // Deezer rejects the way an aborted fetch does, once the run is stopped.
+    const fetch = stubFetch(() => {
+        controller.abort()
+        throw new DOMException('This operation was aborted', 'AbortError')
+    })
+    t.after(fetch.restore)
+
+    const rows = await lookupSongs(['One'], { signal: controller.signal })
+
+    assert.deepEqual(rows, [])
+})
+
+test('runs to the end when no signal is given at all', async (t) => {
+    const fetch = stubEverything({ tracks: { One: { id: 1 }, Two: { id: 2 } } })
+    t.after(fetch.restore)
+
+    const rows = await lookupSongs(['One', 'Two'])
+
+    assert.equal(rows.length, 2)
+})

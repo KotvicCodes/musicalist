@@ -87,9 +87,22 @@ ipcMain.handle('open-external', async (event, url) => {
 // The result is returned as an envelope rather than thrown, because Electron
 // re-serialises anything a handler throws and the renderer would show the one
 // sentence worth reading behind its own "Error invoking remote method" framing.
+// One run at a time, because the button that starts it stays disabled for the
+// duration. The controller lives here rather than in the renderer because an
+// AbortSignal cannot cross the IPC bridge.
+let currentRun = null
+
 ipcMain.handle('run-lookup', async (event, { songs }) => {
+    // A run somehow still going when a new one starts would otherwise stream
+    // its rows into the new list.
+    if (currentRun) currentRun.abort()
+
+    const controller = new AbortController()
+    currentRun = controller
+
     try {
         const rows = await lookupSongs(songs, {
+            signal: controller.signal,
             // stream each finished song back to the renderer as it is ready
             onProgress: (song) => {
                 if (!event.sender.isDestroyed()) {
@@ -97,10 +110,19 @@ ipcMain.handle('run-lookup', async (event, { songs }) => {
                 }
             }
         })
-        return { ok: true, rows }
+        return { ok: true, rows, stopped: controller.signal.aborted }
     } catch (err) {
         return describeFailure(err)
+    } finally {
+        if (currentRun === controller) currentRun = null
     }
+})
+
+//! Cancel Listener
+// Stopping is always allowed, including when nothing is running, so the renderer
+// never has to reason about whether its request arrived in time.
+ipcMain.handle('cancel-lookup', async () => {
+    if (currentRun) currentRun.abort()
 })
 
 //! Export Results

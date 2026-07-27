@@ -19,11 +19,31 @@ const REQUEST_TIMEOUT_MS = 15000
 
 // A recording lookup with these includes returns genres, tags and the parent
 // release groups in a single response, so no follow-up call is needed.
-const RECORDING_INC = 'genres+tags+releases+release-groups'
+//
+// MusicBrainz charges per request rather than per byte, so the four added here
+// ride along on a call already being made and cost nothing in throttle time:
+// artist-credits gives artists as identities rather than a joined string,
+// artist-rels gives the production credits, url-rels gives the links out, and
+// isrcs gives every code for the recording rather than only the one Deezer
+// served, which matters because a remaster shares its original's ISRC.
+const RECORDING_INC = 'genres+tags+releases+release-groups+artist-credits+artist-rels+url-rels+isrcs'
 
 // How many genres and tags to keep once sorted by community vote count.
 const MAX_GENRES = 8
 const MAX_TAGS = 8
+
+// Production credits run long on well documented recordings, and past the first
+// handful they are session players rather than anything a summary would use.
+const MAX_CREDITS = 10
+
+// The links that lead somewhere a person would actually want to go. The rest
+// are streaming URLs for services this app does not touch.
+const LINK_TYPES = new Set(['wikidata', 'discogs', 'allmusic', 'secondhandsongs'])
+
+// Constructible from the release group id already in hand, so the canonical
+// artwork for the original release costs no request at all. Deezer's cover is
+// whichever reissue it happened to serve.
+const COVER_ART_BASE = 'https://coverartarchive.org/release-group'
 
 //! Helpers
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -123,6 +143,60 @@ function canonicalReleaseGroup(releases) {
     })
 }
 
+//! Relations
+// artist-rels and url-rels both land in the same `relations` array, told apart
+// by target-type, so one pass over it serves both.
+
+// The production side of a recording: producer, engineer, mixer, and the
+// players credited by instrument. A dimension the app had nothing of, arriving
+// in a response it was already paying for.
+function productionCredits(relations) {
+    if (!Array.isArray(relations)) return []
+
+    const seen = new Set()
+    const credits = []
+    for (const relation of relations) {
+        if (!relation || relation['target-type'] !== 'artist') continue
+
+        const artist = relation.artist
+        if (!artist || !artist.name) continue
+
+        const role = relation.type || 'credited'
+        const key = `${artist.name}|${role}`
+        if (seen.has(key)) continue
+
+        seen.add(key)
+        credits.push({ name: artist.name, role })
+        if (credits.length >= MAX_CREDITS) break
+    }
+    return credits
+}
+
+function externalLinks(relations) {
+    const links = {}
+    if (!Array.isArray(relations)) return links
+
+    for (const relation of relations) {
+        if (!relation || relation['target-type'] !== 'url') continue
+        if (!LINK_TYPES.has(relation.type) || links[relation.type]) continue
+
+        const resource = relation.url && relation.url.resource
+        if (resource) links[relation.type] = resource
+    }
+    return links
+}
+
+// Artists as identities rather than a joined display string, so two spellings
+// of one name stop counting as two artists.
+function creditedArtists(artistCredit) {
+    if (!Array.isArray(artistCredit)) return []
+
+    return artistCredit
+        .map((entry) => entry && entry.artist)
+        .filter((artist) => artist && artist.name)
+        .map((artist) => ({ name: artist.name, id: artist.id || null }))
+}
+
 //! Extraction
 // Turn a recording lookup into the MusicBrainz half of a song row.
 function extractRecording(recording) {
@@ -133,7 +207,15 @@ function extractRecording(recording) {
         releaseSecondaryTypes: [],
         genreWeights: [],
         wikiGenres: [],
-        tags: []
+        tags: [],
+        disambiguation: null,
+        mbDurationMs: null,
+        isVideo: null,
+        mbArtists: [],
+        credits: [],
+        links: {},
+        mbIsrcs: [],
+        coverArtUrl: null
     }
     if (!recording || !recording.id) return empty
 
@@ -160,7 +242,23 @@ function extractRecording(recording) {
             group && Array.isArray(group['secondary-types']) ? group['secondary-types'] : [],
         genreWeights: genres,
         wikiGenres: genres.map((genre) => genre.name),
-        tags: tags.map((tag) => tag.name)
+        tags: tags.map((tag) => tag.name),
+        // MusicBrainz's own note on which recording this is: live, remix,
+        // acoustic version, radio edit. The app warns that an ambiguous query
+        // can land on a live take, and this is the field that says so outright.
+        disambiguation: recording.disambiguation || null,
+        // The canonical length, which is worth having next to Deezer's because
+        // a wide gap between the two is a wrong match showing itself.
+        mbDurationMs: typeof recording.length === 'number' ? recording.length : null,
+        isVideo: recording.video === true,
+        mbArtists: creditedArtists(recording['artist-credit']),
+        credits: productionCredits(recording.relations),
+        links: externalLinks(recording.relations),
+        // Every code MusicBrainz holds, not only the one Deezer served. A
+        // remaster and the pressing it was cut from share an ISRC, so the set
+        // is more informative than the single code.
+        mbIsrcs: Array.isArray(recording.isrcs) ? recording.isrcs : [],
+        coverArtUrl: group && group.id ? `${COVER_ART_BASE}/${group.id}/front` : null
     }
 }
 
@@ -244,5 +342,7 @@ module.exports = {
     canonicalReleaseGroup,
     pickRecording,
     escapeQuery,
-    rankNamed
+    rankNamed,
+    productionCredits,
+    externalLinks
 }

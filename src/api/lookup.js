@@ -6,6 +6,22 @@ const { createClient } = require('./deezer.js')
 const musicbrainz = require('./musicbrainz.js')
 const acousticbrainz = require('./acousticbrainz.js')
 
+//! Duration Cross-check
+// A studio original and a live take of the same song rarely agree within a few
+// seconds. Deezer's duration and MusicBrainz's are both already in hand, so
+// comparing them is the cheapest wrong-match detector there is: no request, no
+// heuristic, just two independent sources disagreeing about the same recording.
+const DURATION_TOLERANCE_MS = 5000
+
+function compareDurations(deezerMs, mbMs) {
+    if (typeof deezerMs !== 'number' || typeof mbMs !== 'number' || deezerMs <= 0 || mbMs <= 0) {
+        return { durationGapMs: null, durationDisagrees: null }
+    }
+
+    const gap = Math.abs(deezerMs - mbMs)
+    return { durationGapMs: gap, durationDisagrees: gap > DURATION_TOLERANCE_MS }
+}
+
 //! Blank Row
 // A song Deezer cannot find still gets a row, so the output lines up with the
 // input list and the user can see exactly which queries missed.
@@ -42,6 +58,16 @@ function blankRow(query) {
         releaseSecondaryTypes: [],
         genreWeights: [],
         tags: [],
+        disambiguation: null,
+        mbDurationMs: null,
+        isVideo: null,
+        mbArtists: [],
+        credits: [],
+        links: {},
+        mbIsrcs: [],
+        coverArtUrl: null,
+        durationGapMs: null,
+        durationDisagrees: null,
         mbRecordingId: null,
         // How well Deezer's answer matched the query, so a shaky match is
         // visible as one rather than presented like any other row.
@@ -83,7 +109,8 @@ async function lookupSong(deezer, query, signal) {
         ...track,
         found: true,
         ...enrichment,
-        ...audio
+        ...audio,
+        ...compareDurations(track.durationMs, enrichment.mbDurationMs)
     }
 }
 
@@ -124,4 +151,4 @@ async function lookupSongs(songs, { onProgress, signal } = {}) {
 }
 
 //! Export
-module.exports = { lookupSongs, lookupSong, blankRow }
+module.exports = { lookupSongs, lookupSong, blankRow, compareDurations }

@@ -4,7 +4,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { lookupSongs, blankRow } = require('../src/api/lookup.js')
+const { lookupSongs, blankRow, compareDurations } = require('../src/api/lookup.js')
 const { response, stubFetch, deezerHit, deezerTrack, deezerAlbum } = require('./helpers.js')
 
 //! Helpers
@@ -293,4 +293,35 @@ test('runs to the end when no signal is given at all', async (t) => {
     const rows = await lookupSongs(['One', 'Two'])
 
     assert.equal(rows.length, 2)
+})
+
+//! Duration Cross-check
+// Two independent sources disagreeing about the same recording is the cheapest
+// wrong-match signal available, and both numbers are already in hand.
+test('flags a wide gap between what Deezer served and what MusicBrainz holds', () => {
+    // a live take against the studio original
+    const wide = compareDurations(354_000, 412_000)
+
+    assert.equal(wide.durationGapMs, 58_000)
+    assert.equal(wide.durationDisagrees, true)
+})
+
+test('accepts the small gap two catalogues normally have', () => {
+    const close = compareDurations(354_000, 353_000)
+
+    assert.equal(close.durationGapMs, 1000)
+    assert.equal(close.durationDisagrees, false)
+})
+
+test('says nothing at all when either side has no duration', () => {
+    // false would read as "these agree", which is not what a missing number says
+    assert.deepEqual(compareDurations(354_000, null), {
+        durationGapMs: null,
+        durationDisagrees: null
+    })
+    assert.deepEqual(compareDurations(null, 354_000), {
+        durationGapMs: null,
+        durationDisagrees: null
+    })
+    assert.deepEqual(compareDurations(0, 354_000), { durationGapMs: null, durationDisagrees: null })
 })

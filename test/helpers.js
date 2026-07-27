@@ -119,7 +119,11 @@ function deezerTrack(overrides = {}) {
         track_position: 11,
         disk_number: 1,
         bpm: 143.9,
-        contributors: [{ id: 1, name: 'Queen', link: 'https://www.deezer.com/artist/1' }],
+        rank: 892_145,
+        gain: -8.2,
+        preview: 'https://cdn.deezer.com/preview/42.mp3',
+        explicit_content_lyrics: 0,
+        contributors: [{ id: 1, name: 'Queen', link: 'https://www.deezer.com/artist/1', role: 'Main' }],
         ...overrides
     }
 }
@@ -130,6 +134,8 @@ function deezerAlbum(overrides = {}) {
         title: 'A Night at the Opera',
         record_type: 'album',
         nb_tracks: 12,
+        label: 'EMI',
+        upc: '0602527664972',
         release_date: '2011-01-01',
         genres: { data: [{ id: 152, name: 'Rock' }] },
         cover_big: 'https://img/big.jpg',

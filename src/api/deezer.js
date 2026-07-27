@@ -1,8 +1,16 @@
 // SPDX-FileCopyrightText: 2025-2026 Kotvič
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+//! Import
+const { pickBestHit } = require('../match.js')
+
 //! Constants
 const API_BASE = 'https://api.deezer.com'
+
+// Enough candidates for the scorer to have a real choice, and few enough that
+// the response stays small. Only the winner costs a follow-up call, so this is
+// free in requests.
+const SEARCH_LIMIT = 5
 
 // Deezer's public API needs no key and allows 50 requests per 5 seconds per IP.
 // A 110 ms gap works out to about 45 in any 5 second window, which keeps a long
@@ -230,22 +238,34 @@ function createClient() {
     }
 
     return {
-        // Returns the mapped track, or null when Deezer knows nothing about it.
+        // Returns the mapped track, or null when nothing Deezer offered is a
+        // credible answer to the query.
         async searchTrack(query, { signal } = {}) {
-            const params = new URLSearchParams({ q: query, limit: '1' })
+            const params = new URLSearchParams({ q: query, limit: String(SEARCH_LIMIT) })
             const found = await request(`/search?${params}`, { signal })
 
             const items = found && Array.isArray(found.data) ? found.data : []
             if (items.length === 0) return null
-            const hit = items[0]
+
+            // Deezer ranks by its own relevance and never says how close the
+            // top hit actually was, so the candidates are scored against what
+            // was asked for. Only the winner costs a detail call, so asking for
+            // several hits does not cost a request.
+            const best = pickBestHit(query, items)
+            if (!best) return null
 
             // The search payload omits bpm, the release date and the full
             // credits, so the detail call is what makes the row worth having.
             // If it comes back empty the search hit still stands on its own.
-            const track = (await request(`/track/${encodeURIComponent(hit.id)}`, { signal })) || hit
+            const id = best.hit.id
+            const track = (await request(`/track/${encodeURIComponent(id)}`, { signal })) || best.hit
             const album = await getAlbum((track.album && track.album.id) || null, signal)
 
-            return mapTrack(track, album)
+            return {
+                ...mapTrack(track, album),
+                matchScore: best.score,
+                matchConfidence: best.confidence
+            }
         }
     }
 }

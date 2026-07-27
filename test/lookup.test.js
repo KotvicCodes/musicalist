@@ -29,7 +29,10 @@ function stubEverything({ tracks = {}, mbDown = false, audio = null } = {}) {
             if (url.includes('/search')) {
                 const query = new URL(url).searchParams.get('q')
                 const track = tracks[query]
-                return response({ data: track ? [deezerHit({ id: track.id })] : [] })
+                // Titled after the query, because Deezer's hits are now scored
+                // against it and a stub answering everything with the same song
+                // would be refused exactly as a real wrong hit is.
+                return response({ data: track ? [deezerHit({ id: track.id, title: query })] : [] })
             }
             if (url.includes('/track/')) {
                 const id = Number(url.split('/track/')[1])

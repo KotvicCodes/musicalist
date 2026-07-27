@@ -17,6 +17,17 @@ const MIN_GAP_MS = 1100
 // a useful row, so the deadline degrades to null like any other failure.
 const REQUEST_TIMEOUT_MS = 15000
 
+// MusicBrainz signals throttling with 503 and a "server is currently busy" body
+// rather than the 429 you would expect, so it arrives looking like an outage.
+// Treating it as one costs the row every genre, the original date and the
+// recording id, and the id is the key AcousticBrainz and ListenBrainz are
+// looked up by, so one throttled request quietly empties most of the row. The
+// gap above is meant to stay under the limit, but a shared address or a second
+// client on the same machine can still trip it, so it is worth waiting out.
+const BUSY_STATUS = 503
+const MAX_ATTEMPTS = 3
+const BUSY_WAIT_MS = 2000
+
 // A recording lookup with these includes returns genres, tags and the parent
 // release groups in a single response, so no follow-up call is needed.
 //
@@ -74,8 +85,10 @@ function throttled(task) {
 //! Request
 // MusicBrainz failures are never fatal here: a song without genres is still a
 // useful row, so callers get null instead of an exception.
-async function request(url, signal) {
-    return throttled(async () => {
+// `busyWaitMs` is overridable only so the retry path can be tested without
+// sitting out a real back off; nothing in the app passes it.
+async function request(url, signal, { attempt = 1, busyWaitMs = BUSY_WAIT_MS } = {}) {
+    const result = await throttled(async () => {
         try {
             // The run's own signal and this request's deadline both have to be
             // able to end the call, so they are combined into one.
@@ -84,12 +97,22 @@ async function request(url, signal) {
                 headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
                 signal: signal ? AbortSignal.any([signal, deadline]) : deadline
             })
-            if (!response.ok) return null
-            return await response.json()
+
+            if (response.status === BUSY_STATUS) return { busy: true }
+            if (!response.ok) return { body: null }
+            return { body: await response.json() }
         } catch {
-            return null
+            return { body: null }
         }
     })
+
+    if (!result.busy) return result.body
+    if (attempt >= MAX_ATTEMPTS || (signal && signal.aborted)) return null
+
+    // Widening, because a throttle that is still on after two seconds is not
+    // going to clear in another two.
+    await sleep(busyWaitMs * attempt)
+    return request(url, signal, { attempt: attempt + 1, busyWaitMs })
 }
 
 //! Sorting
@@ -343,6 +366,7 @@ module.exports = {
     pickRecording,
     escapeQuery,
     rankNamed,
+    request,
     productionCredits,
     externalLinks
 }

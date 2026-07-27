@@ -198,8 +198,9 @@ function extractAnalysis(body) {
         // atonal music and worth being able to discount.
         keyStrength: number(tonal.key_strength) === null ? null : round(tonal.key_strength),
         // The archive ran its own tempo estimate, which fills the tracks Deezer
-        // never analysed.
-        archiveBpm: number(rhythm.bpm),
+        // never analysed. Rounded, because it is reported to nine decimal
+        // places and Deezer's own tempo carries one.
+        archiveBpm: number(rhythm.bpm) === null ? null : Math.round(rhythm.bpm * 10) / 10,
         loudness: number(lowlevel.average_loudness),
         dynamicComplexity: number(lowlevel.dynamic_complexity),
         beatsCount: number(rhythm.beats_count)

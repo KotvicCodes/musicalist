@@ -70,6 +70,15 @@ test('a blank row carries every field the renderer reads', () => {
     assert.deepEqual(row.artists, [])
 })
 
+test('a blank row carries the error field even when nothing went wrong', () => {
+    // Every row has the same shape, so the exporter reads one field rather than
+    // guarding against its absence on the rows that succeeded.
+    const row = blankRow('Nonsense')
+
+    assert.ok('error' in row)
+    assert.equal(row.error, null)
+})
+
 //! Happy Path
 test('merges Deezer and MusicBrainz into one row', async (t) => {
     const fetch = stubEverything({ tracks: { 'Bohemian Rhapsody': deezerTrack() } })

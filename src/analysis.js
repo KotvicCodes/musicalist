@@ -60,13 +60,15 @@
             .map(([name, count]) => ({ name, count }))
     }
 
+    // The true median, left unrounded. Rounding only the even-length branch made
+    // the return type depend on how many songs were in the list, which is fine
+    // until a caller forgets to round and gets a fraction from one list and a
+    // whole number from the next. Each caller rounds to its own unit instead.
     function median(values) {
         if (values.length === 0) return null
         const sorted = values.slice().sort((a, b) => a - b)
         const middle = Math.floor(sorted.length / 2)
-        return sorted.length % 2 === 0
-            ? Math.round((sorted[middle - 1] + sorted[middle]) / 2)
-            : sorted[middle]
+        return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
     }
 
     //! Summary
@@ -184,7 +186,7 @@
             },
             topGenres,
             meanDurationMs,
-            medianDurationMs: median(durations),
+            medianDurationMs: durations.length ? Math.round(median(durations)) : null,
             meanBpm,
             // Deezer reports a fractional tempo; whole numbers read better and
             // the tenths carry no meaning to someone scanning a summary.

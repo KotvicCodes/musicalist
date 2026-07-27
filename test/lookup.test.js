@@ -10,8 +10,21 @@ const { response, stubFetch, deezerHit, deezerTrack, deezerAlbum } = require('./
 //! Helpers
 // One stub covering both services, so a run can be driven end to end. Songs are
 // keyed by the query they are found under.
-function stubEverything({ tracks = {}, mbDown = false } = {}) {
+function stubEverything({ tracks = {}, mbDown = false, audio = null } = {}) {
     return stubFetch((url) => {
+        if (url.includes('acousticbrainz.org')) {
+            if (!audio) return response({ message: 'Not found' }, { status: 404 })
+            return response({
+                highlevel: {
+                    danceability: {
+                        all: { danceable: audio.danceable, not_danceable: 1 - audio.danceable },
+                        probability: audio.danceable,
+                        value: 'danceable'
+                    }
+                }
+            })
+        }
+
         if (url.includes('api.deezer.com')) {
             if (url.includes('/search')) {
                 const query = new URL(url).searchParams.get('q')
@@ -156,4 +169,55 @@ test('a dead connection stops the run instead of failing every song', async (t) 
     )
 
     assert.equal(seen.length, 0)
+})
+
+//! Audio Features
+test('merges AcousticBrainz mood into the row', async (t) => {
+    const fetch = stubEverything({ tracks: { Bohemian: deezerTrack() }, audio: { danceable: 0.82 } })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian'])
+
+    assert.equal(row.danceability, 0.82)
+    assert.ok(
+        fetch.calls.some((call) => call.url.includes('acousticbrainz.org/api/v1/rec-1/high-level'))
+    )
+})
+
+test('a song the archive has never seen keeps every other field', async (t) => {
+    // Coverage is partial by design, so a miss has to look like Deezer's
+    // missing BPM: blank, with the rest of the row intact.
+    const fetch = stubEverything({ tracks: { Bohemian: deezerTrack() } })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian'])
+
+    assert.equal(row.danceability, null)
+    assert.equal(row.moodHappy, null)
+    assert.equal(row.found, true)
+    assert.equal(row.title, 'Bohemian Rhapsody')
+    assert.equal(row.originalReleaseDate, '1975-11-21')
+})
+
+test('does not call the archive when MusicBrainz found no recording', async (t) => {
+    const fetch = stubEverything({ tracks: { Bohemian: deezerTrack() }, mbDown: true })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian'])
+
+    assert.equal(row.found, true)
+    assert.equal(row.danceability, null)
+    assert.equal(
+        fetch.calls.some((call) => call.url.includes('acousticbrainz.org')),
+        false
+    )
+})
+
+test('a blank row carries the audio fields too, so every row is the same shape', () => {
+    const row = blankRow('Missing')
+
+    assert.equal('danceability' in row, true)
+    assert.equal('moodHappy' in row, true)
+    assert.equal('instrumental' in row, true)
+    assert.equal(row.danceability, null)
 })

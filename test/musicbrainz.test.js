@@ -442,3 +442,115 @@ test('a stalled MusicBrainz costs genres, not the song', async (t) => {
     assert.equal(result.mbRecordingId, null)
     assert.deepEqual(result.wikiGenres, [])
 })
+
+//! Fields Already In The Payload
+// Each of these arrived in the recording lookup the app was already making.
+test('asks for the credits, links and ISRCs in the same request', async (t) => {
+    const fetch = stubFetch((url) => {
+        if (url.includes('/isrc/')) return response({ recordings: [{ id: 'rec-1' }] })
+        return response(recording())
+    })
+    t.after(fetch.restore)
+
+    await enrich({ isrc: 'GBUM71029604', title: 'Bohemian Rhapsody', artist: 'Queen' })
+    const lookup = fetch.calls.find((call) => call.url.includes('/recording/rec-1'))
+
+    // one request, not four: MusicBrainz charges per call, not per byte
+    assert.match(lookup.url, /artist-credits/)
+    assert.match(lookup.url, /artist-rels/)
+    assert.match(lookup.url, /url-rels/)
+    assert.match(lookup.url, /isrcs/)
+})
+
+test('reads the note saying which recording this actually is', () => {
+    // the field that answers the app's own best-effort matching caveat outright
+    const live = extractRecording(recording({ disambiguation: 'live, Wembley 1986' }))
+
+    assert.equal(live.disambiguation, 'live, Wembley 1986')
+    assert.equal(extractRecording(recording()).disambiguation, null)
+})
+
+test('keeps the canonical length so it can be checked against Deezer', () => {
+    assert.equal(extractRecording(recording({ length: 354_000 })).mbDurationMs, 354_000)
+    assert.equal(extractRecording(recording({ length: undefined })).mbDurationMs, null)
+})
+
+test('collects the production credits by role', () => {
+    const extracted = extractRecording(
+        recording({
+            relations: [
+                { 'target-type': 'artist', type: 'producer', artist: { name: 'Roy Thomas Baker' } },
+                { 'target-type': 'artist', type: 'recording engineer', artist: { name: 'Mike Stone' } },
+                { 'target-type': 'url', type: 'wikidata', url: { resource: 'https://wikidata/Q1' } }
+            ]
+        })
+    )
+
+    assert.deepEqual(extracted.credits, [
+        { name: 'Roy Thomas Baker', role: 'producer' },
+        { name: 'Mike Stone', role: 'recording engineer' }
+    ])
+})
+
+test('keeps the links that lead somewhere, and drops the rest', () => {
+    const extracted = extractRecording(
+        recording({
+            relations: [
+                { 'target-type': 'url', type: 'wikidata', url: { resource: 'https://wikidata/Q1' } },
+                { 'target-type': 'url', type: 'discogs', url: { resource: 'https://discogs/1' } },
+                { 'target-type': 'url', type: 'streaming', url: { resource: 'https://somewhere/1' } }
+            ]
+        })
+    )
+
+    assert.equal(extracted.links.wikidata, 'https://wikidata/Q1')
+    assert.equal(extracted.links.discogs, 'https://discogs/1')
+    assert.equal(extracted.links.streaming, undefined)
+})
+
+test('reads artists as identities rather than a joined string', () => {
+    const extracted = extractRecording(
+        recording({
+            'artist-credit': [{ artist: { id: 'mbid-queen', name: 'Queen' } }]
+        })
+    )
+
+    assert.deepEqual(extracted.mbArtists, [{ name: 'Queen', id: 'mbid-queen' }])
+})
+
+test('keeps every ISRC, not only the one Deezer served', () => {
+    // a remaster and its original share a code, so the set says more than one
+    const extracted = extractRecording(recording({ isrcs: ['GBUM71029604', 'GBUM71105604'] }))
+
+    assert.deepEqual(extracted.mbIsrcs, ['GBUM71029604', 'GBUM71105604'])
+})
+
+test('builds the cover art URL from an id it already has', () => {
+    const extracted = extractRecording(
+        recording({
+            releases: [
+                {
+                    'release-group': {
+                        id: 'rg-1',
+                        'primary-type': 'Album',
+                        'first-release-date': '1975-11-21'
+                    }
+                }
+            ]
+        })
+    )
+
+    assert.equal(extracted.coverArtUrl, 'https://coverartarchive.org/release-group/rg-1/front')
+})
+
+test('returns the new fields empty rather than absent when there is no recording', () => {
+    const empty = extractRecording(null)
+
+    assert.equal(empty.disambiguation, null)
+    assert.equal(empty.mbDurationMs, null)
+    assert.equal(empty.coverArtUrl, null)
+    assert.deepEqual(empty.credits, [])
+    assert.deepEqual(empty.links, {})
+    assert.deepEqual(empty.mbIsrcs, [])
+    assert.deepEqual(empty.mbArtists, [])
+})

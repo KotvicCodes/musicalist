@@ -6,6 +6,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron')
 const { lookupSongs } = require('./api/lookup.js')
 const { toCsv, toJson } = require('./export.js')
 const { isSafeExternalUrl } = require('./url.js')
+const { describeFailure } = require('./failure.js')
 const fs = require('node:fs/promises')
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
@@ -82,15 +83,24 @@ ipcMain.handle('open-external', async (event, url) => {
 //! Lookup Listener
 // Both APIs are open, so there is nothing to configure and nothing to check
 // before a run: the songs go straight out.
+//
+// The result is returned as an envelope rather than thrown, because Electron
+// re-serialises anything a handler throws and the renderer would show the one
+// sentence worth reading behind its own "Error invoking remote method" framing.
 ipcMain.handle('run-lookup', async (event, { songs }) => {
-    return lookupSongs(songs, {
-        // stream each finished song back to the renderer as it is ready
-        onProgress: (song) => {
-            if (!event.sender.isDestroyed()) {
-                event.sender.send('lookup-progress', song)
+    try {
+        const rows = await lookupSongs(songs, {
+            // stream each finished song back to the renderer as it is ready
+            onProgress: (song) => {
+                if (!event.sender.isDestroyed()) {
+                    event.sender.send('lookup-progress', song)
+                }
             }
-        }
-    })
+        })
+        return { ok: true, rows }
+    } catch (err) {
+        return describeFailure(err)
+    }
 })
 
 //! Export Results
@@ -105,6 +115,13 @@ ipcMain.handle('export-results', async (event, { rows, summary, format }) => {
 
     if (canceled || !filePath) return { saved: false }
 
-    await fs.writeFile(filePath, isCsv ? toCsv(rows) : toJson(rows, summary), 'utf8')
+    try {
+        await fs.writeFile(filePath, isCsv ? toCsv(rows) : toJson(rows, summary), 'utf8')
+    } catch (err) {
+        // The reason, never the path: the user chose where this went and it may
+        // sit somewhere they would rather not have on screen.
+        return { saved: false, reason: err.code || 'the file could not be written' }
+    }
+
     return { saved: true, fileName: path.basename(filePath) }
 })

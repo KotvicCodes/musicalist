@@ -84,13 +84,9 @@ test('a blank row carries every field the renderer reads', () => {
     assert.deepEqual(row.deezerGenres, [])
     assert.deepEqual(row.genreWeights, [])
     assert.deepEqual(row.artists, [])
-})
 
-test('a blank row carries the error field even when nothing went wrong', () => {
-    // Every row has the same shape, so the exporter reads one field rather than
-    // guarding against its absence on the rows that succeeded.
-    const row = blankRow('Nonsense')
-
+    // error is present on every row, not only the ones that went wrong, so the
+    // exporter reads one field rather than guarding against its absence
     assert.ok('error' in row)
     assert.equal(row.error, null)
 })

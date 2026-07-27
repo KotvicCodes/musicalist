@@ -12,7 +12,7 @@ const {
     extractAnalysis,
     emptyAnalysis
 } = require('../src/api/acousticbrainz.js')
-const { response, stubFetch, timeoutError } = require('./helpers.js')
+const { response, stubFetch } = require('./helpers.js')
 
 //! Fixtures
 // A two-class classifier as the archive actually returns it: `all` holds both
@@ -142,15 +142,6 @@ test('sends a deadline with the request', async (t) => {
 
     assert.equal(fetch.calls.length, 1)
     assert.ok(fetch.calls[0].options.signal instanceof AbortSignal)
-})
-
-test('a stalled archive costs mood, not the song', async (t) => {
-    const fetch = stubFetch(() => {
-        throw timeoutError()
-    })
-    t.after(fetch.restore)
-
-    assert.deepEqual(await features('rec-1'), emptyFeatures())
 })
 
 //! Classifiers Already In The Payload

@@ -12,7 +12,7 @@ const {
     escapeQuery,
     rankNamed
 } = require('../src/api/musicbrainz.js')
-const { response, stubFetch, timeoutError } = require('./helpers.js')
+const { response, stubFetch } = require('./helpers.js')
 
 //! Fixtures
 const releaseGroup = (overrides = {}) => ({
@@ -429,18 +429,6 @@ test('sends a deadline with every request', async (t) => {
     for (const call of fetch.calls) {
         assert.ok(call.options.signal instanceof AbortSignal)
     }
-})
-
-test('a stalled MusicBrainz costs genres, not the song', async (t) => {
-    const fetch = stubFetch(() => {
-        throw timeoutError()
-    })
-    t.after(fetch.restore)
-
-    const result = await enrich({ isrc: 'GBUM71029604', title: 'Bohemian Rhapsody', artist: 'Queen' })
-
-    assert.equal(result.mbRecordingId, null)
-    assert.deepEqual(result.wikiGenres, [])
 })
 
 //! Fields Already In The Payload

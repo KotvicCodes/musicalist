@@ -33,6 +33,7 @@ let rows = []
 
 //! Elements
 const inputTextareaQ = document.getElementById('inputTextareaQ')
+const separatorQ = document.getElementById('separatorQ')
 const scrapeButtonQ = document.getElementById('scrapeButtonQ')
 const stopButtonQ = document.getElementById('stopButtonQ')
 const outputQ = document.getElementById('outputQ')
@@ -62,7 +63,7 @@ window.electronAPI.onProgress((song) => {
 
 scrapeButtonQ.addEventListener('click', async () => {
     //* Get the input value
-    const songArray = textToArray(inputTextareaQ.value)
+    const songArray = textToArray(inputTextareaQ.value, separatorQ.value)
     if (songArray.length === 0) {
         statusQ.textContent = 'Please enter at least one song.'
         return

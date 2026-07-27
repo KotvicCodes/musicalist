@@ -10,6 +10,7 @@ const {
     canonicalReleaseGroup,
     pickRecording,
     escapeQuery,
+    request,
     rankNamed
 } = require('../src/api/musicbrainz.js')
 const { response, stubFetch } = require('./helpers.js')
@@ -541,4 +542,62 @@ test('returns the new fields empty rather than absent when there is no recording
     assert.deepEqual(empty.links, {})
     assert.deepEqual(empty.mbIsrcs, [])
     assert.deepEqual(empty.mbArtists, [])
+})
+
+//! Throttling
+// MusicBrainz answers a throttled request with 503 and a "server is busy" body
+// rather than a 429, so it arrives looking exactly like an outage.
+test('waits out a throttle instead of losing the whole recording', async (t) => {
+    let attempts = 0
+    const fetch = stubFetch(() => {
+        attempts += 1
+        if (attempts === 1) {
+            return response({ error: 'The MusicBrainz web server is currently busy.' }, { status: 503 })
+        }
+        return response(recording())
+    })
+    t.after(fetch.restore)
+
+    const body = await request('https://musicbrainz.org/ws/2/recording/rec-1', undefined, {
+        busyWaitMs: 0
+    })
+
+    assert.equal(attempts, 2)
+    assert.equal(body.id, 'rec-1')
+})
+
+test('gives up on a throttle that will not clear', async (t) => {
+    const fetch = stubFetch(() => response({ error: 'busy' }, { status: 503 }))
+    t.after(fetch.restore)
+
+    const body = await request('https://musicbrainz.org/ws/2/recording/rec-1', undefined, {
+        busyWaitMs: 0
+    })
+
+    assert.equal(body, null)
+    assert.equal(fetch.calls.length, 3)
+})
+
+test('does not sit out a back off for a run that was stopped', async (t) => {
+    const controller = new AbortController()
+    const fetch = stubFetch(() => {
+        controller.abort()
+        return response({ error: 'busy' }, { status: 503 })
+    })
+    t.after(fetch.restore)
+
+    const body = await request('https://musicbrainz.org/ws/2/recording/rec-1', controller.signal, {
+        busyWaitMs: 0
+    })
+
+    assert.equal(body, null)
+    assert.equal(fetch.calls.length, 1)
+})
+
+test('does not retry an ordinary failure, which will not clear by waiting', async (t) => {
+    const fetch = stubFetch(() => response({}, { status: 404 }))
+    t.after(fetch.restore)
+
+    assert.equal(await request('https://musicbrainz.org/ws/2/recording/rec-1'), null)
+    assert.equal(fetch.calls.length, 1)
 })

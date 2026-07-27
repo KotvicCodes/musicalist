@@ -249,3 +249,7 @@ test('skips the low-level request entirely without a recording id', async (t) =>
     assert.deepEqual(await analysis(null), emptyAnalysis())
     assert.equal(fetch.calls.length, 0)
 })
+
+test('rounds the archive tempo, which arrives to nine decimal places', () => {
+    assert.equal(extractAnalysis({ rhythm: { bpm: 140.279327393 } }).archiveBpm, 140.3)
+})

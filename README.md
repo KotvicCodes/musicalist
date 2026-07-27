@@ -72,7 +72,7 @@ Reissue drift is worth explaining. Deezer serves whichever release of a song it 
 
 **BPM is not universal.** Deezer publishes a tempo for most tracks but not all. Where it has none, the field is left blank rather than filled with a zero, and the summary says how many songs it had to skip so an average is never mistaken for the whole list.
 
-**No energy, danceability or mood.** Only tempo is freely available. Spotify [deprecated](https://developer.spotify.com/documentation/web-api/reference/get-audio-features) its audio-features endpoints in November 2024 and restricted them to apps registered before then, AcousticBrainz stopped collecting in 2022, and the remaining services charge for access. There is no mood analysis in Musicalist for now.
+**No energy, danceability or mood yet.** Spotify [deprecated](https://developer.spotify.com/documentation/web-api/reference/get-audio-features) its audio-features endpoints in November 2024 and restricted them to apps registered before then, and the commercial services charge for access. AcousticBrainz stopped accepting new submissions in 2022, but that only ended collection: the archive it gathered is still served, it is free, and it is keyed by the same recording ID Musicalist already looks up. Danceability and mood are therefore reachable for the songs it happens to hold, and support is being built. Energy is not: nothing free publishes it, so Musicalist would have to invent the number.
 
 **Deezer genres are coarse.** They are attached to the album rather than the track, and tend toward broad buckets like Rock or Pop. That is why MusicBrainz carries the genre load here; the Deezer genres are shown as a bonus.
 

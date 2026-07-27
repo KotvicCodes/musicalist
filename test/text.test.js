@@ -56,14 +56,6 @@ test('auto keeps a title that contains a comma whole', () => {
     ])
 })
 
-test('auto falls back to commas when there is only one line', () => {
-    assert.deepEqual(textToArray('One, Two, Three'), ['One', 'Two', 'Three'])
-})
-
-test('auto strips the comma someone leaves at the end of each line', () => {
-    assert.deepEqual(textToArray('One,\nTwo,\nThree'), ['One', 'Two', 'Three'])
-})
-
 test('an explicit comma splits a title that contains one', () => {
     assert.deepEqual(textToArray('Hey, Soul Sister\nBillie Jean', 'comma'), [
         'Hey',

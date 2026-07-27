@@ -83,11 +83,6 @@ function stubHangingFetch() {
     }
 }
 
-// What fetch rejects with when its deadline fires.
-function timeoutError() {
-    return new DOMException('The operation was aborted due to timeout', 'TimeoutError')
-}
-
 //! Fixtures
 
 // What GET /search returns per hit: no bpm, no release date, one artist only.
@@ -182,7 +177,6 @@ module.exports = {
     response,
     stubFetch,
     stubHangingFetch,
-    timeoutError,
     deezerHit,
     deezerTrack,
     deezerAlbum,

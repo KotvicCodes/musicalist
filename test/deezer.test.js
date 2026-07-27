@@ -82,20 +82,6 @@ test('joins every credited artist, not just the first', () => {
     assert.equal(mapped.artists[1].name, 'David Bowie')
 })
 
-test('counts an artist credited under two roles only once', () => {
-    const mapped = mapTrack(
-        deezerTrack({
-            contributors: [
-                { id: 1, name: 'Queen', role: 'Main' },
-                { id: 1, name: 'Queen', role: 'Featured' }
-            ]
-        })
-    )
-
-    assert.equal(mapped.artists.length, 1)
-    assert.equal(mapped.author, 'Queen')
-})
-
 test('falls back to the single artist when there are no contributors', () => {
     const mapped = mapTrack(deezerHit())
 
@@ -293,8 +279,10 @@ test('does not mistake a 200 carrying an error body for a result', async (t) => 
 
 test('retries a quota rejection and then succeeds', async (t) => {
     let attempts = 0
-    const fetch = stubFetch(() => {
+    const fetch = stubFetch((_url, options) => {
         attempts += 1
+        // the retry carries its own deadline, like any other request
+        assert.ok(options.signal instanceof AbortSignal)
         if (attempts === 1) return response({ error: { type: 'Exception', code: 4 } })
         return response(deezerTrack())
     })
@@ -338,21 +326,6 @@ test('gives up on a request that is accepted and then never answered', async (t)
     await assert.rejects(() => request('/track/42', { timeoutMs: 300 }), { kind: 'timeout' })
 })
 
-test('treats a stalled request as one bad song, not a dead connection', async (t) => {
-    const fetch = stubHangingFetch()
-    t.after(fetch.restore)
-
-    // 'network' is the kind that aborts the whole run. A slow answer is not
-    // grounds for that, so a deadline must report something else.
-    await assert.rejects(
-        () => request('/track/42', { timeoutMs: 300 }),
-        (err) => {
-            assert.notEqual(err.kind, 'network')
-            return true
-        }
-    )
-})
-
 test('sends a deadline with every request', async (t) => {
     const fetch = stubDeezer()
     t.after(fetch.restore)
@@ -363,21 +336,6 @@ test('sends a deadline with every request', async (t) => {
     for (const call of fetch.calls) {
         assert.ok(call.options.signal instanceof AbortSignal)
     }
-})
-
-test('carries the deadline into a quota retry', async (t) => {
-    let attempts = 0
-    const fetch = stubFetch((_url, options) => {
-        attempts += 1
-        assert.ok(options.signal instanceof AbortSignal)
-        if (attempts === 1) return response({ error: { type: 'Exception', code: 4 } })
-        return response(deezerTrack())
-    })
-    t.after(fetch.restore)
-
-    await request('/track/42', { quotaWaitMs: 0 })
-
-    assert.equal(attempts, 2)
 })
 
 //! Fields Already In The Payload

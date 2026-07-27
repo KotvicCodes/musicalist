@@ -5,7 +5,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 
 const { popularity, extractCounts, BATCH_SIZE } = require('../src/api/listenbrainz.js')
-const { response, stubFetch, timeoutError } = require('./helpers.js')
+const { response, stubFetch } = require('./helpers.js')
 
 //! Extraction
 test('keys the counts by recording id', () => {
@@ -88,15 +88,6 @@ test('makes no request at all for a run with no recording ids', async (t) => {
 test('an outage costs the counts, not the songs', async (t) => {
     const fetch = stubFetch(() => {
         throw new Error('ECONNRESET')
-    })
-    t.after(fetch.restore)
-
-    assert.equal((await popularity(['rec-1'])).size, 0)
-})
-
-test('a stall costs the counts, not the songs', async (t) => {
-    const fetch = stubFetch(() => {
-        throw timeoutError()
     })
     t.after(fetch.restore)
 

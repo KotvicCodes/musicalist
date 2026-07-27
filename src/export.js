@@ -23,8 +23,33 @@ const COLUMNS = [
     ['originalReleaseDate', (row) => row.originalReleaseDate],
     ['releaseType', (row) => row.releaseType],
     ['releaseSecondaryTypes', (row) => row.releaseSecondaryTypes],
+    // MusicBrainz's own note on which recording this is: live, remix, radio
+    // edit. The most useful single field for spotting a row that is the right
+    // song in the wrong version.
+    ['disambiguation', (row) => row.disambiguation],
     ['durationMs', (row) => row.durationMs],
+    ['mbDurationMs', (row) => row.mbDurationMs],
+    // Two catalogues disagreeing about the same recording, which is the
+    // cheapest wrong-match signal there is.
+    ['durationGapMs', (row) => row.durationGapMs],
+    ['durationDisagrees', (row) => row.durationDisagrees],
     ['bpm', (row) => row.bpm],
+    ['bpmSource', (row) => row.bpmSource],
+    ['archiveBpm', (row) => row.archiveBpm],
+    // The measured half of AcousticBrainz, as opposed to the classified half.
+    ['musicalKey', (row) => row.musicalKey],
+    ['keyStrength', (row) => row.keyStrength],
+    ['loudness', (row) => row.loudness],
+    ['dynamicComplexity', (row) => row.dynamicComplexity],
+    ['beatsCount', (row) => row.beatsCount],
+    // ReplayGain in decibels: measured loudness rather than a classifier guess.
+    ['gainDb', (row) => row.gainDb],
+    // Two popularity axes that do not measure the same thing: one is Deezer's
+    // own ranking, the other is listens submitted across everyone using
+    // ListenBrainz.
+    ['popularity', (row) => row.popularity],
+    ['listenCount', (row) => row.listenCount],
+    ['listenerCount', (row) => row.listenerCount],
     // Probabilities from 0 to 1, blank where AcousticBrainz has no analysis for
     // the recording. Blank rather than 0, which is a real score here.
     ['danceability', (row) => row.danceability],
@@ -36,15 +61,31 @@ const COLUMNS = [
     ['moodAcoustic', (row) => row.moodAcoustic],
     ['moodElectronic', (row) => row.moodElectronic],
     ['instrumental', (row) => row.instrumental],
+    ['timbreBright', (row) => row.timbreBright],
+    ['tonal', (row) => row.tonal],
+    ['moodCluster', (row) => row.moodCluster],
     ['explicit', (row) => row.explicit],
+    // Deezer's four-value rating, where the boolean above cannot tell an
+    // unrated track apart from a clean one.
+    ['explicitLyrics', (row) => row.explicitLyrics],
+    ['isVideo', (row) => row.isVideo],
     ['trackNumber', (row) => row.trackNumber],
     ['discNumber', (row) => row.discNumber],
+    ['label', (row) => row.label],
+    ['upc', (row) => row.upc],
     ['isrc', (row) => row.isrc],
+    ['musicbrainzIsrcs', (row) => row.mbIsrcs],
     ['deezerGenres', (row) => row.deezerGenres],
     ['musicbrainzGenres', (row) => row.wikiGenres],
     ['tags', (row) => row.tags],
+    ['credits', (row) => creditCell(row.credits)],
+    ['musicbrainzArtists', (row) => (row.mbArtists || []).map((artist) => artist.name)],
     ['deezerUrl', (row) => row.deezerUrl],
+    ['previewUrl', (row) => row.previewUrl],
     ['coverArt', (row) => row.coverArt],
+    ['coverArtArchive', (row) => row.coverArtUrl],
+    ['wikidataUrl', (row) => (row.links || {}).wikidata || null],
+    ['discogsUrl', (row) => (row.links || {}).discogs || null],
     ['mbRecordingId', (row) => row.mbRecordingId],
     ['error', (row) => row.error || null]
 ]
@@ -52,6 +93,13 @@ const COLUMNS = [
 // Arrays collapse into one cell; semicolons keep them readable next to the
 // comma the format itself uses.
 const LIST_SEPARATOR = '; '
+
+// A production credit only means something with its role attached, so the two
+// travel together rather than as two parallel columns that have to be lined up
+// by eye.
+function creditCell(credits) {
+    return (credits || []).map((credit) => `${credit.name} (${credit.role})`)
+}
 
 // Excel assumes the system codepage unless a UTF-8 BOM says otherwise, which
 // mangles accented artist names.

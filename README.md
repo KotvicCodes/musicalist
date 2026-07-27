@@ -2,7 +2,7 @@
 
 Musicalist takes a list of songs and gives you back structured metadata for every one of them: artists, album, release date, genres, length, and more. It then summarises the whole list, so you can see what a collection actually looks like rather than reading it song by song.
 
-Data comes from two places. [Deezer's public API](https://developers.deezer.com/api) identifies each track and supplies the catalogue facts, including tempo. [MusicBrainz](https://musicbrainz.org) supplies genres, the original release date, and the release typing. Both are open, so there is nothing to sign up for and nothing to configure: install Musicalist, paste your songs, and go. The app is built with [Electron](https://www.electronjs.org).
+Data comes from three places. [Deezer's public API](https://developers.deezer.com/api) identifies each track and supplies the catalogue facts, including tempo. [MusicBrainz](https://musicbrainz.org) supplies genres, the original release date, and the release typing. [AcousticBrainz](https://acousticbrainz.org) adds danceability and mood where its archive reaches. All three are open, so there is nothing to sign up for and nothing to configure: install Musicalist, paste your songs, and go. The app is built with [Electron](https://www.electronjs.org).
 
 This project follows [Semantic Versioning](https://semver.org). See the [latest release](https://github.com/KotvicCodes/musicalist/releases/latest) for the current version.
 
@@ -67,16 +67,23 @@ Reissue drift is worth explaining. Deezer serves whichever release of a song it 
 | Original release date                                                   | MusicBrainz          |
 | Release type and secondary types (Live, Compilation, Soundtrack, Remix) | MusicBrainz          |
 | Recording ID                                                            | MusicBrainz          |
+| Danceability                                                            | AcousticBrainz       |
+| Mood: happy, sad, aggressive, relaxed, party, acoustic, electronic      | AcousticBrainz       |
+| Instrumental                                                            | AcousticBrainz       |
 
 ## Limitations
 
 **BPM is not universal.** Deezer publishes a tempo for most tracks but not all. Where it has none, the field is left blank rather than filled with a zero, and the summary says how many songs it had to skip so an average is never mistaken for the whole list.
 
-**No energy, danceability or mood.** Only tempo is freely available. Spotify [deprecated](https://developer.spotify.com/documentation/web-api/reference/get-audio-features) its audio-features endpoints in November 2024 and restricted them to apps registered before then, AcousticBrainz stopped collecting in 2022, and the remaining services charge for access. There is no mood analysis in Musicalist for now.
+**Mood stops at 2022.** Danceability and mood come from AcousticBrainz, which stopped accepting new submissions in 2022. The archive it gathered is still served and still free, but nothing has been added since, so a song released after the cutoff almost never has an analysis. Older catalogue is covered well. Where there is nothing, the fields are left blank rather than filled with a zero, which is a real score here, and the summary says how many songs it could analyse.
+
+**Mood is a guess, not a measurement.** Each figure is a classifier's probability, not a fact about the song, and the models were trained on small sets. Treat them as a rough sort rather than a verdict. Musicalist deliberately ignores the archive's genre and gender classifiers, which are unreliable enough to file "Smells Like Teen Spirit" as trance; genres come from MusicBrainz instead.
+
+**No energy.** Spotify [deprecated](https://developer.spotify.com/documentation/web-api/reference/get-audio-features) its audio-features endpoints in November 2024 and restricted them to apps registered before then, the commercial services charge for access, and AcousticBrainz never published an energy classifier. Musicalist could only invent the number, so it does not report one.
 
 **Deezer genres are coarse.** They are attached to the album rather than the track, and tend toward broad buckets like Rock or Pop. That is why MusicBrainz carries the genre load here; the Deezer genres are shown as a bonus.
 
-**Speed is set by MusicBrainz.** MusicBrainz allows one request per second per application and blocks addresses that exceed it, so Musicalist spaces its calls deliberately. Deezer is far more generous, at 50 requests every 5 seconds, so it is never the bottleneck. Expect roughly two to three seconds per song, meaning a hundred-song list takes a few minutes.
+**Speed is set by MusicBrainz.** MusicBrainz allows one request per second per application and blocks addresses that exceed it, so Musicalist spaces its calls deliberately. Deezer is far more generous, at 50 requests every 5 seconds, so it is never the bottleneck. AcousticBrainz adds a request per song, but it lands inside a gap MusicBrainz was already making the run wait out, so it costs almost nothing. Expect roughly two to three seconds per song, meaning a hundred-song list takes a few minutes.
 
 **Matching is best-effort.** Songs are matched to MusicBrainz by ISRC where Deezer provides one, which is exact. Where it does not, Musicalist falls back to a text search and picks the most original-looking recording, which is usually right but not guaranteed. Deezer's own search takes the top hit for your query, so an ambiguous query can land on a live version or a remaster; adding the artist name makes it far more reliable.
 

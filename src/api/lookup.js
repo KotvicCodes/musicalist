@@ -4,6 +4,7 @@
 //! Import
 const { createClient } = require('./deezer.js')
 const musicbrainz = require('./musicbrainz.js')
+const acousticbrainz = require('./acousticbrainz.js')
 
 //! Blank Row
 // A song Deezer cannot find still gets a row, so the output lines up with the
@@ -35,13 +36,15 @@ function blankRow(query) {
         releaseSecondaryTypes: [],
         genreWeights: [],
         tags: [],
-        mbRecordingId: null
+        mbRecordingId: null,
+        ...acousticbrainz.emptyFeatures()
     }
 }
 
 //! Single Song
 // Deezer identifies the track and carries the catalogue facts; MusicBrainz
-// supplies the genres and the original release date.
+// supplies the genres and the original release date; AcousticBrainz adds mood
+// and danceability for the recordings it happens to hold.
 async function lookupSong(deezer, query) {
     const track = await deezer.searchTrack(query)
     if (!track) return blankRow(query)
@@ -54,11 +57,19 @@ async function lookupSong(deezer, query) {
         artist: primaryArtist?.name
     })
 
+    // Has to follow the enrichment rather than run alongside it, because the
+    // recording id is the key. The extra round trip is close to free in wall
+    // clock terms: MusicBrainz spaces its own calls a second apart from the
+    // last one it made, so this lands inside a gap the run was already waiting
+    // out. It returns nulls rather than throwing, so it cannot fail a row.
+    const audio = await acousticbrainz.features(enrichment.mbRecordingId)
+
     return {
         ...blankRow(query),
         ...track,
         found: true,
-        ...enrichment
+        ...enrichment,
+        ...audio
     }
 }
 

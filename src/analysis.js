@@ -9,6 +9,21 @@
     const TOP_GENRES = 10
     const TOP_ARTISTS = 5
 
+    // Repeated rather than imported from the AcousticBrainz client, because the
+    // renderer loads this file as a plain script and has no require(). A test
+    // asserts the two lists stay identical.
+    const MOOD_FIELDS = [
+        'danceability',
+        'moodHappy',
+        'moodSad',
+        'moodAggressive',
+        'moodRelaxed',
+        'moodParty',
+        'moodAcoustic',
+        'moodElectronic',
+        'instrumental'
+    ]
+
     //! Helpers
 
     // Deezer serves whichever reissue it happens to carry, so its release date is
@@ -121,6 +136,25 @@
             ? Math.round(tempos.reduce((sum, value) => sum + value, 0) / tempos.length)
             : null
 
+        //* Mood
+        // AcousticBrainz stopped taking submissions in 2022, so it holds well
+        // under half of a typical list. Each mean covers only the songs it
+        // actually has, and audioMissing is reported for the same reason
+        // bpmMissing is: an average drawn from a third of the list must never
+        // read as a verdict on all of it.
+        const moods = {}
+        for (const field of MOOD_FIELDS) {
+            const values = found.map((row) => row[field]).filter((value) => typeof value === 'number')
+            moods[field] = values.length
+                ? Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 1000) /
+                  1000
+                : null
+        }
+
+        // One field standing in for the row as a whole: the archive returns
+        // every classifier together or none at all.
+        const analysed = found.filter((row) => typeof row.danceability === 'number')
+
         //* Explicit
         const rated = found.filter((row) => typeof row.explicit === 'boolean')
         const explicitCount = rated.filter((row) => row.explicit).length
@@ -156,6 +190,9 @@
             // the tenths carry no meaning to someone scanning a summary.
             medianBpm: tempos.length ? Math.round(median(tempos)) : null,
             bpmMissing: found.length - tempos.length,
+            moods,
+            audioAnalysed: analysed.length,
+            audioMissing: found.length - analysed.length,
             explicit: {
                 count: explicitCount,
                 ratio: rated.length ? explicitCount / rated.length : 0
@@ -180,7 +217,7 @@
     //! Export
     // Loaded two ways: as a CommonJS module by the tests and the main
     // process, and as a plain script by the renderer, which has no require().
-    const api = { summarise, formatDuration, effectiveYear }
+    const api = { summarise, formatDuration, effectiveYear, MOOD_FIELDS }
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = api

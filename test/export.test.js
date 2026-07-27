@@ -104,3 +104,36 @@ test('keeps every field of the song record', () => {
     assert.deepEqual(parsed.songs[0].genreWeights[0], { name: 'rock', count: 13 })
     assert.equal(parsed.summary, null)
 })
+
+//! Audio Features
+test('exports each mood as its own column', () => {
+    const csv = toCsv([songRow({ danceability: 0.82, moodAggressive: 0.95, moodHappy: 0.12 })])
+    const [header, row] = csv.replace(/^﻿/, '').trim().split('\r\n')
+
+    const columns = header.split(',')
+    const values = row.split(',')
+    const read = (name) => values[columns.indexOf(name)]
+
+    assert.equal(read('danceability'), '0.82')
+    assert.equal(read('moodAggressive'), '0.95')
+    assert.equal(read('moodHappy'), '0.12')
+})
+
+test('leaves an unanalysed song blank rather than zero', () => {
+    // 0 is a real danceability score, so writing it for missing data would be
+    // indistinguishable from a song the archive scored at the floor.
+    const csv = toCsv([songRow({ danceability: null, moodHappy: null })])
+    const [header, row] = csv.replace(/^﻿/, '').trim().split('\r\n')
+
+    const columns = header.split(',')
+    const values = row.split(',')
+
+    assert.equal(values[columns.indexOf('danceability')], '')
+    assert.equal(values[columns.indexOf('moodHappy')], '')
+})
+
+test('names AcousticBrainz as a source in the JSON export', () => {
+    const parsed = JSON.parse(toJson([songRow()], null))
+
+    assert.match(parsed.source, /AcousticBrainz/)
+})

@@ -4,6 +4,22 @@
 //! Constants
 const REPO_URL = 'https://github.com/KotvicCodes/musicalist#readme'
 
+// The classifiers worth naming on screen, in the order they read best. A trait
+// is listed only once it wins its own two-class model, so 0.5 is the threshold
+// rather than an arbitrary cut.
+const MOOD_LABELS = {
+    moodAggressive: 'aggressive',
+    moodParty: 'party',
+    moodHappy: 'happy',
+    moodSad: 'sad',
+    moodRelaxed: 'relaxed',
+    moodAcoustic: 'acoustic',
+    moodElectronic: 'electronic',
+    instrumental: 'instrumental'
+}
+
+const MOOD_THRESHOLD = 0.5
+
 const { summarise, formatDuration } = window.MusicalistAnalysis
 const { escapeHtml, textToArray } = window.MusicalistText
 
@@ -164,6 +180,28 @@ function renderSummary() {
         )
     }
 
+    // Both cells carry the analysed count, because the archive covers well under
+    // half a typical list and an average over a third of it should say so.
+    if (summary.moods.danceability !== null) {
+        const coverage = summary.audioMissing
+            ? `${summary.audioAnalysed} of ${summary.audioAnalysed + summary.audioMissing} analysed`
+            : `all ${summary.audioAnalysed} analysed`
+
+        cell('Danceability', `${Math.round(summary.moods.danceability * 100)}%`, coverage)
+
+        const strongest = Object.keys(MOOD_LABELS)
+            .filter((field) => summary.moods[field] !== null)
+            .sort((a, b) => summary.moods[b] - summary.moods[a])[0]
+
+        if (strongest && summary.moods[strongest] >= MOOD_THRESHOLD) {
+            cell(
+                'Mood',
+                MOOD_LABELS[strongest],
+                `${Math.round(summary.moods[strongest] * 100)}% average`
+            )
+        }
+    }
+
     summaryStatsQ.innerHTML = cells.join('')
 }
 
@@ -188,6 +226,19 @@ function renderSong(song) {
             ? `${text(song.originalReleaseDate)} <span class="song__aside">(Deezer: ${text(deezerDate)})</span>`
             : text(deezerDate || song.originalReleaseDate)
 
+    // Every trait that won its own model, strongest first, with danceability as
+    // a number since it is the one people compare between songs. A song the
+    // archive never analysed falls through to the em dash like any other gap.
+    const traits = Object.entries(MOOD_LABELS)
+        .filter(([field]) => typeof song[field] === 'number' && song[field] >= MOOD_THRESHOLD)
+        .sort((a, b) => song[b[0]] - song[a[0]])
+        .map(([, label]) => label)
+
+    const moodLine =
+        typeof song.danceability === 'number'
+            ? [...traits, `${Math.round(song.danceability * 100)}% danceable`].join(', ')
+            : null
+
     const albumLine = [
         song.album,
         song.releaseType || song.albumType,
@@ -204,6 +255,7 @@ function renderSong(song) {
                <dt>Released</dt><dd>${released}</dd>
                <dt>Length</dt><dd>${text(formatDuration(song.durationMs))}</dd>
                <dt>BPM</dt><dd>${text(song.bpm === null || song.bpm === undefined ? null : Math.round(song.bpm))}</dd>
+               <dt>Mood</dt><dd>${text(moodLine)}</dd>
                <dt>Genres</dt><dd>${list(song.wikiGenres)}</dd>
                <dt>Deezer genres</dt><dd>${list(song.deezerGenres)}</dd>
                <dt>Tags</dt><dd>${list(song.tags)}</dd>

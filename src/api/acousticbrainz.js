@@ -165,6 +165,47 @@ function extractFeatures(body) {
     return features
 }
 
+//! Low Level Analysis
+// The measured half of the archive, as opposed to the classified half above.
+// Key is the single biggest musical fact the app was missing: it reported tempo
+// but never what a song was in, and key distribution across a list is what
+// anyone actually building a set wants to know.
+function emptyAnalysis() {
+    return {
+        musicalKey: null,
+        keyStrength: null,
+        archiveBpm: null,
+        loudness: null,
+        dynamicComplexity: null,
+        beatsCount: null
+    }
+}
+
+function extractAnalysis(body) {
+    if (!body) return emptyAnalysis()
+
+    const tonal = body.tonal || {}
+    const rhythm = body.rhythm || {}
+    const lowlevel = body.lowlevel || {}
+
+    const number = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null)
+
+    return {
+        // "A minor" rather than the two fields it arrives in, because nobody
+        // wants the key without its scale.
+        musicalKey: tonal.key_key && tonal.key_scale ? `${tonal.key_key} ${tonal.key_scale}` : null,
+        // How sure the estimate is. A weak key is common in percussive or
+        // atonal music and worth being able to discount.
+        keyStrength: number(tonal.key_strength) === null ? null : round(tonal.key_strength),
+        // The archive ran its own tempo estimate, which fills the tracks Deezer
+        // never analysed.
+        archiveBpm: number(rhythm.bpm),
+        loudness: number(lowlevel.average_loudness),
+        dynamicComplexity: number(lowlevel.dynamic_complexity),
+        beatsCount: number(rhythm.beats_count)
+    }
+}
+
 //! Public Lookup
 // Keyed by the MusicBrainz recording ID, which the enrichment step has already
 // resolved, so this costs one request and no extra matching. Picking the wrong
@@ -177,5 +218,26 @@ async function features(mbRecordingId, signal) {
     return extractFeatures(body)
 }
 
+// A second request for the same recording. The caller only makes it once the
+// high-level answer has confirmed the archive holds this recording at all, so
+// it never fires for the majority of a list that has no analysis, and like the
+// high-level call it lands inside a gap MusicBrainz was already making the run
+// wait out.
+async function analysis(mbRecordingId, signal) {
+    if (!mbRecordingId) return emptyAnalysis()
+
+    const body = await request(`${API_BASE}/${encodeURIComponent(mbRecordingId)}/low-level`, signal)
+    return extractAnalysis(body)
+}
+
 //! Export
-module.exports = { features, extractFeatures, emptyFeatures, FEATURES, LABELS }
+module.exports = {
+    features,
+    extractFeatures,
+    emptyFeatures,
+    analysis,
+    extractAnalysis,
+    emptyAnalysis,
+    FEATURES,
+    LABELS
+}

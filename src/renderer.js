@@ -82,6 +82,15 @@ scrapeButtonQ.addEventListener('click', async () => {
     try {
         const result = await window.electronAPI.runLookup(songArray)
 
+        // Popularity is fetched for the whole list in one request once the loop
+        // is done, so the rows that streamed in are a preview and these are the
+        // finished ones. Re-rendering from them is a single write.
+        if (Array.isArray(result.rows)) {
+            rows = result.rows
+            outputQ.innerHTML = rows.map(renderSong).join('')
+            renderSummary()
+        }
+
         if (result.stopped) {
             // Everything collected before the stop is still on screen and still
             // exportable, so say what was kept rather than treating this as a

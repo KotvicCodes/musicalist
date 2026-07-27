@@ -4,7 +4,14 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { features, extractFeatures, emptyFeatures } = require('../src/api/acousticbrainz.js')
+const {
+    features,
+    extractFeatures,
+    emptyFeatures,
+    analysis,
+    extractAnalysis,
+    emptyAnalysis
+} = require('../src/api/acousticbrainz.js')
 const { response, stubFetch, timeoutError } = require('./helpers.js')
 
 //! Fixtures
@@ -199,4 +206,55 @@ test('ignores the ballroom rhythm classifier', () => {
 test('carries the label fields in the empty shape too', () => {
     assert.equal(emptyFeatures().moodCluster, null)
     assert.ok('moodCluster' in emptyFeatures())
+})
+
+//! Low Level Analysis
+// The measured half of the archive, as opposed to the classified half.
+test('reads the musical key as a key and a scale together', () => {
+    const extracted = extractAnalysis({
+        tonal: { key_key: 'A', key_scale: 'minor', key_strength: 0.7412 }
+    })
+
+    assert.equal(extracted.musicalKey, 'A minor')
+    assert.equal(extracted.keyStrength, 0.741)
+})
+
+test('leaves the key null when either half is missing', () => {
+    assert.equal(extractAnalysis({ tonal: { key_key: 'A' } }).musicalKey, null)
+    assert.equal(extractAnalysis({ tonal: { key_scale: 'minor' } }).musicalKey, null)
+})
+
+test('reads the tempo, loudness and rhythm measurements', () => {
+    const extracted = extractAnalysis({
+        rhythm: { bpm: 143.2, beats_count: 812 },
+        lowlevel: { average_loudness: 0.91, dynamic_complexity: 3.2 }
+    })
+
+    assert.equal(extracted.archiveBpm, 143.2)
+    assert.equal(extracted.beatsCount, 812)
+    assert.equal(extracted.loudness, 0.91)
+    assert.equal(extracted.dynamicComplexity, 3.2)
+})
+
+test('returns the empty shape for a missing or bare body', () => {
+    assert.deepEqual(extractAnalysis(null), emptyAnalysis())
+    assert.deepEqual(extractAnalysis({}), emptyAnalysis())
+})
+
+test('asks the low-level endpoint for the recording it was given', async (t) => {
+    const fetch = stubFetch(() => response({ tonal: { key_key: 'C', key_scale: 'major' } }))
+    t.after(fetch.restore)
+
+    const extracted = await analysis('rec-1')
+
+    assert.equal(extracted.musicalKey, 'C major')
+    assert.match(fetch.calls[0].url, /rec-1\/low-level/)
+})
+
+test('skips the low-level request entirely without a recording id', async (t) => {
+    const fetch = stubFetch(() => response({}))
+    t.after(fetch.restore)
+
+    assert.deepEqual(await analysis(null), emptyAnalysis())
+    assert.equal(fetch.calls.length, 0)
 })

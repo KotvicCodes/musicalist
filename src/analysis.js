@@ -21,7 +21,9 @@
         'moodParty',
         'moodAcoustic',
         'moodElectronic',
-        'instrumental'
+        'instrumental',
+        'timbreBright',
+        'tonal'
     ]
 
     //! Helpers

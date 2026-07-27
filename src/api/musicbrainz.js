@@ -163,18 +163,14 @@ function escapeQuery(value) {
 }
 
 //! Resolution
-// Preferred route: the ISRC from Deezer is an exact identifier, so it maps to
-// the right recording without any fuzzy matching.
-async function recordingIdFromIsrc(isrc) {
-    const body = await request(`${API_BASE}/isrc/${encodeURIComponent(isrc)}?fmt=json`)
-    const recordings = body && Array.isArray(body.recordings) ? body.recordings : []
-    return recordings.length ? recordings[0].id : null
-}
-
 // A well known song matches hundreds of recordings that all score 100, because
 // every compilation and live album counts as its own recording. Taking the first
 // hit lands on an arbitrary repackaging with no genres attached, so rank the top
 // scorers and keep the one that looks like the original studio release.
+//
+// The ISRC endpoint returns neither scores nor releases, which this degrades to
+// cleanly: every entry ties at score 0 with no release group to inspect, so the
+// release date alone decides.
 function pickRecording(recordings) {
     if (!Array.isArray(recordings) || recordings.length === 0) return null
 
@@ -193,6 +189,18 @@ function pickRecording(recordings) {
 
     scored.sort((a, b) => a.repackaged - b.repackaged || a.date.localeCompare(b.date))
     return scored[0].entry.id
+}
+
+// Preferred route: the ISRC from Deezer is an exact identifier, so it needs no
+// fuzzy matching to find the song. It does not identify one recording though.
+// Labels reissue a track under its original ISRC, so a remaster and the pressing
+// it was cut from share one code, and MusicBrainz returns them in no particular
+// order. Taking the first entry therefore dated "Smells Like Teen Spirit" to the
+// 2021 remaster, which also carries none of the genres the 1991 recording has,
+// so the same ranking the search path uses picks between them.
+async function recordingIdFromIsrc(isrc) {
+    const body = await request(`${API_BASE}/isrc/${encodeURIComponent(isrc)}?fmt=json`)
+    return pickRecording(body && body.recordings)
 }
 
 // Fallback for tracks with no ISRC, or an ISRC MusicBrainz has never seen.

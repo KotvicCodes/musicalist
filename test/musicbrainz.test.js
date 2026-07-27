@@ -292,6 +292,57 @@ test('resolves through the ISRC and then loads the recording', async (t) => {
     assert.match(fetch.calls[1].url, /inc=genres\+tags\+releases\+release-groups/)
 })
 
+// A reissue keeps the original ISRC, so one code can name several recordings.
+// The remaster is a real hit, not a bad match, so only the date separates them.
+test('prefers the original when one ISRC covers a remaster too', async (t) => {
+    const fetch = stubFetch((url) => {
+        if (url.includes('/isrc/'))
+            return response({
+                recordings: [
+                    {
+                        id: 'remaster',
+                        title: 'Smells Like Teen Spirit (remastered 2021)',
+                        'first-release-date': '2021-11-10'
+                    },
+                    {
+                        id: 'original',
+                        title: 'Smells Like Teen Spirit',
+                        'first-release-date': '1991-09-10'
+                    }
+                ]
+            })
+        return response(recording({ id: 'original', 'first-release-date': '1991-09-10' }))
+    })
+    t.after(fetch.restore)
+
+    const result = await enrich({ isrc: 'USGF19942501', title: 'Smells Like Teen Spirit' })
+
+    assert.equal(result.mbRecordingId, 'original')
+    assert.equal(result.originalReleaseDate, '1991-09-10')
+    assert.match(fetch.calls[1].url, /\/recording\/original\?/)
+})
+
+// The ISRC payload has no scores and no releases, so the ranking has to survive
+// both being absent rather than reading them off undefined.
+test('ranks ISRC hits that carry no score or releases', () => {
+    assert.equal(
+        pickRecording([
+            { id: 'late', 'first-release-date': '2021-11-10' },
+            { id: 'early', 'first-release-date': '1991-09-10' }
+        ]),
+        'early'
+    )
+})
+
+// An undated entry must not win by default, but it is still better than nothing.
+test('keeps an undated ISRC hit behind a dated one', () => {
+    assert.equal(
+        pickRecording([{ id: 'undated' }, { id: 'dated', 'first-release-date': '1991' }]),
+        'dated'
+    )
+    assert.equal(pickRecording([{ id: 'only' }]), 'only')
+})
+
 test('falls back to a text search when the ISRC is unknown', async (t) => {
     const fetch = stubFetch((url) => {
         if (url.includes('/isrc/')) return response({ recordings: [] })

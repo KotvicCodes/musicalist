@@ -37,6 +37,10 @@ function blankRow(query) {
         genreWeights: [],
         tags: [],
         mbRecordingId: null,
+        // How well Deezer's answer matched the query, so a shaky match is
+        // visible as one rather than presented like any other row.
+        matchScore: null,
+        matchConfidence: null,
         // Present on every row so the shape is uniform whether the song failed
         // or not, rather than appearing only on the rows that went wrong.
         error: null,

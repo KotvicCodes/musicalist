@@ -284,8 +284,17 @@ function renderSong(song) {
         .filter(Boolean)
         .join(' · ')
 
+    // Deezer answers every query with its closest guess. A low score means this
+    // row is worth a second look, and saying so is the whole point of scoring.
+    // A middling one still shows in the export for anyone auditing a whole list.
+    const shaky =
+        song.matchConfidence === 'low'
+            ? `<p class="song__note">Loose match for “${text(song.query)}”. Worth checking.</p>`
+            : ''
+
     return `<article class="song">
           <h2 class="song__title">${text(song.title)}</h2>
+          ${shaky}
           <dl class="song__meta">
                <dt>Author</dt><dd>${text(song.author)}</dd>
                <dt>Album</dt><dd>${text(albumLine)}</dd>

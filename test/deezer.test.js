@@ -139,15 +139,16 @@ test('searches, then fetches the track and its album', async (t) => {
     assert.equal(fetch.calls.length, 3)
 })
 
-test('sends the query and a limit of one', async (t) => {
-    const fetch = stubDeezer()
+test('sends the query and asks for several candidates', async (t) => {
+    const fetch = stubDeezer({ hits: [deezerHit({ title: 'Billie Jean' })] })
     t.after(fetch.restore)
 
     await createClient().searchTrack('Billie Jean')
     const searchUrl = fetch.calls[0].url
 
     assert.match(searchUrl, /q=Billie\+Jean/)
-    assert.match(searchUrl, /limit=1/)
+    // several, so the scorer has a real choice; only the winner costs a call
+    assert.match(searchUrl, /limit=5/)
 })
 
 test('returns null when the search finds nothing', async (t) => {
@@ -188,14 +189,78 @@ test('an album that cannot be read still yields the track', async (t) => {
 })
 
 test('caches album lookups within a run', async (t) => {
-    const fetch = stubDeezer()
+    // Both songs have to actually be found, and both have to come off the same
+    // album, or this passes without the cache ever being consulted.
+    const fetch = stubFetch((url) => {
+        if (url.includes('/search')) {
+            const query = new URL(`https://api.deezer.com${url.split('api.deezer.com')[1]}`)
+            return response({ data: [deezerHit({ title: query.searchParams.get('q') })] })
+        }
+        if (url.includes('/track/')) return response(deezerTrack())
+        return response(deezerAlbum())
+    })
     t.after(fetch.restore)
 
     const deezer = createClient()
-    await deezer.searchTrack('Bohemian Rhapsody')
-    await deezer.searchTrack('Love of My Life')
+    const first = await deezer.searchTrack('Bohemian Rhapsody')
+    const second = await deezer.searchTrack('Love of My Life')
 
+    assert.ok(first)
+    assert.ok(second)
+    assert.equal(fetch.calls.filter((call) => call.url.includes('/track/')).length, 2)
     assert.equal(fetch.calls.filter((call) => call.url.includes('/album/')).length, 1)
+})
+
+//! Match Scoring
+test('picks the candidate that answers the query, not the first', async (t) => {
+    const fetch = stubDeezer({
+        hits: [
+            deezerHit({
+                id: 1,
+                title: 'Billie Jean Karaoke Tribute',
+                artist: { id: 9, name: 'Party Hits' }
+            }),
+            deezerHit({ id: 2, title: 'Billie Jean', artist: { id: 3, name: 'Michael Jackson' } })
+        ],
+        track: deezerTrack({ id: 2, title: 'Billie Jean' })
+    })
+    t.after(fetch.restore)
+
+    const track = await createClient().searchTrack('Billie Jean Michael Jackson')
+
+    assert.equal(track.title, 'Billie Jean')
+    assert.ok(fetch.calls.some((call) => call.url.includes('/track/2')))
+})
+
+test('reports how well the answer matched the query', async (t) => {
+    const fetch = stubDeezer({ hits: [deezerHit({ title: 'Bohemian Rhapsody' })] })
+    t.after(fetch.restore)
+
+    const track = await createClient().searchTrack('Bohemian Rhapsody')
+
+    assert.equal(track.matchConfidence, 'high')
+    assert.equal(track.matchScore, 1)
+})
+
+test('refuses a confident wrong song rather than presenting it as found', async (t) => {
+    // Deezer answers every query with its closest guess, so this is what a
+    // nonsense query actually gets back.
+    const fetch = stubDeezer({ hits: [deezerHit({ title: 'Bohemian Rhapsody' })] })
+    t.after(fetch.restore)
+
+    assert.equal(await createClient().searchTrack('asdkjhaskdjh'), null)
+    // and it never paid for the detail call
+    assert.equal(fetch.calls.length, 1)
+})
+
+test('keeps a near miss but says it is one', async (t) => {
+    const fetch = stubDeezer({ hits: [deezerHit({ title: 'Bohemian Rhapsody' })] })
+    t.after(fetch.restore)
+
+    const track = await createClient().searchTrack('Bohemain Rhapsody')
+
+    assert.ok(track)
+    assert.equal(track.matchConfidence, 'low')
 })
 
 //! Errors

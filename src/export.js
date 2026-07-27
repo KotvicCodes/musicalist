@@ -8,6 +8,10 @@
 const COLUMNS = [
     ['query', (row) => row.query],
     ['found', (row) => row.found],
+    // How well Deezer's answer matched the query, so a shaky row can be spotted
+    // and checked rather than trusted like any other.
+    ['matchConfidence', (row) => row.matchConfidence],
+    ['matchScore', (row) => row.matchScore],
     ['title', (row) => row.title],
     ['author', (row) => row.author],
     ['artists', (row) => (row.artists || []).map((artist) => artist.name)],

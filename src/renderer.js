@@ -23,6 +23,9 @@ const MOOD_THRESHOLD = 0.5
 const { summarise, formatDuration } = window.MusicalistAnalysis
 const { escapeHtml, textToArray } = window.MusicalistText
 
+//! Helpers
+const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
+
 //! State
 // Every row received this run, kept so the summary and the exporters have
 // something to work from without asking the main process again.
@@ -31,6 +34,7 @@ let rows = []
 //! Elements
 const inputTextareaQ = document.getElementById('inputTextareaQ')
 const scrapeButtonQ = document.getElementById('scrapeButtonQ')
+const stopButtonQ = document.getElementById('stopButtonQ')
 const outputQ = document.getElementById('outputQ')
 const statusQ = document.getElementById('statusQ')
 
@@ -70,12 +74,19 @@ scrapeButtonQ.addEventListener('click', async () => {
     summaryQ.classList.add('hidden')
     exportStatusQ.textContent = ''
     scrapeButtonQ.disabled = true
+    stopButtonQ.disabled = false
+    stopButtonQ.classList.remove('hidden')
     statusQ.textContent = `Looking up ${songArray.length} song${songArray.length === 1 ? '' : 's'}…`
 
     try {
         const result = await window.electronAPI.runLookup(songArray)
 
-        if (result.ok) {
+        if (result.stopped) {
+            // Everything collected before the stop is still on screen and still
+            // exportable, so say what was kept rather than treating this as a
+            // run that produced nothing.
+            statusQ.textContent = `Stopped. ${plural(rows.length, 'song')} kept.`
+        } else if (result.ok) {
             const missed = rows.filter((row) => !row.found).length
             statusQ.textContent = missed ? `Done. ${missed} not found.` : 'Done.'
         } else {
@@ -90,7 +101,17 @@ scrapeButtonQ.addEventListener('click', async () => {
         statusQ.textContent = `Something went wrong: ${err.message}`
     } finally {
         scrapeButtonQ.disabled = false
+        stopButtonQ.classList.add('hidden')
     }
+})
+
+//* Stop
+// The main process owns the controller, so this only has to ask. The button
+// disables itself because a second press has nothing left to do.
+stopButtonQ.addEventListener('click', () => {
+    stopButtonQ.disabled = true
+    statusQ.textContent = 'Stopping…'
+    window.electronAPI.cancelLookup()
 })
 
 //! Export
@@ -125,8 +146,6 @@ function renderSummary() {
 
     const summary = summarise(rows)
     const cells = []
-
-    const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
 
     const cell = (label, value, detail) =>
         cells.push(`<div class="stat">

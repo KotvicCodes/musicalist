@@ -81,12 +81,19 @@ function throttled(task) {
 // deadline; nothing in the app passes either.
 async function request(
     path,
-    { attempt = 1, quotaWaitMs = QUOTA_WAIT_MS, timeoutMs = REQUEST_TIMEOUT_MS } = {}
+    { attempt = 1, quotaWaitMs = QUOTA_WAIT_MS, timeoutMs = REQUEST_TIMEOUT_MS, signal } = {}
 ) {
     const body = await throttled(async () => {
+        // Two things may end this call: the run being stopped, and the deadline
+        // running out. Combining them means a request already in flight when
+        // Stop is pressed drops immediately, rather than the run waiting out
+        // whatever it was in the middle of.
+        const deadline = AbortSignal.timeout(timeoutMs)
+        const combined = signal ? AbortSignal.any([signal, deadline]) : deadline
+
         let response
         try {
-            response = await fetch(`${API_BASE}${path}`, { signal: AbortSignal.timeout(timeoutMs) })
+            response = await fetch(`${API_BASE}${path}`, { signal: combined })
         } catch (err) {
             if (isTimeout(err)) {
                 throw new DeezerError('Deezer did not answer in time.', { kind: 'timeout' })
@@ -127,8 +134,14 @@ async function request(
                 kind: 'rate-limit'
             })
         }
+        // No point sitting out a five second quota window for a run that has
+        // already been stopped.
+        if (signal && signal.aborted) {
+            throw new DeezerError('The run was stopped.', { kind: 'cancelled' })
+        }
+
         await sleep(quotaWaitMs)
-        return request(path, { attempt: attempt + 1, quotaWaitMs, timeoutMs })
+        return request(path, { attempt: attempt + 1, quotaWaitMs, timeoutMs, signal })
     }
 
     throw new DeezerError(`Deezer rejected the request (${error.type || 'error'}).`)
@@ -205,22 +218,22 @@ function mapTrack(track, album) {
 function createClient() {
     const albumCache = new Map()
 
-    async function getAlbum(id) {
+    async function getAlbum(id, signal) {
         if (!id) return null
         if (albumCache.has(id)) return albumCache.get(id)
 
         // Genres and the album type are enrichment, not the point of the row,
         // so a failure here must not cost the song.
-        const album = await request(`/album/${encodeURIComponent(id)}`).catch(() => null)
+        const album = await request(`/album/${encodeURIComponent(id)}`, { signal }).catch(() => null)
         albumCache.set(id, album)
         return album
     }
 
     return {
         // Returns the mapped track, or null when Deezer knows nothing about it.
-        async searchTrack(query) {
+        async searchTrack(query, { signal } = {}) {
             const params = new URLSearchParams({ q: query, limit: '1' })
-            const found = await request(`/search?${params}`)
+            const found = await request(`/search?${params}`, { signal })
 
             const items = found && Array.isArray(found.data) ? found.data : []
             if (items.length === 0) return null
@@ -229,8 +242,8 @@ function createClient() {
             // The search payload omits bpm, the release date and the full
             // credits, so the detail call is what makes the row worth having.
             // If it comes back empty the search hit still stands on its own.
-            const track = (await request(`/track/${encodeURIComponent(hit.id)}`)) || hit
-            const album = await getAlbum((track.album && track.album.id) || null)
+            const track = (await request(`/track/${encodeURIComponent(hit.id)}`, { signal })) || hit
+            const album = await getAlbum((track.album && track.album.id) || null, signal)
 
             return mapTrack(track, album)
         }

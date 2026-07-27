@@ -41,15 +41,25 @@
             <!--* Input -->
             <section class="card" id="inputQ">
                 <label class="field__label" for="inputTextareaQ">Your songs</label>
-                <p class="field__hint">Enter songs separated by commas.</p>
+                <p class="field__hint">
+                    One song per line, or separated by commas. Titles containing a comma need one song
+                    per line, or an explicit separator below.
+                </p>
                 <textarea
                     id="inputTextareaQ"
                     class="field__textarea"
-                    placeholder="Bohemian Rhapsody, Smells Like Teen Spirit, Billie Jean"
+                    placeholder="Bohemian Rhapsody&#10;Smells Like Teen Spirit&#10;Hey, Soul Sister"
                 ></textarea>
                 <div class="actions">
                     <button id="scrapeButtonQ" class="button button--primary">Proceed</button>
                     <button id="stopButtonQ" class="button button--ghost hidden">Stop</button>
+                    <label class="field__inline" for="separatorQ">Split on</label>
+                    <select id="separatorQ" class="field__select">
+                        <option value="auto" selected>Auto</option>
+                        <option value="newline">New line</option>
+                        <option value="comma">Comma</option>
+                        <option value="semicolon">Semicolon</option>
+                    </select>
                     <span id="statusQ" class="status" aria-live="polite"></span>
                 </div>
             </section>

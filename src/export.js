@@ -53,6 +53,21 @@ const LIST_SEPARATOR = '; '
 // mangles accented artist names.
 const BOM = '﻿'
 
+// Every spreadsheet evaluates a cell that opens with one of these, so a value
+// reading `=HYPERLINK("http://…","Play")` becomes a live formula the moment the
+// file is opened. None of these values are the user's own: MusicBrainz genres
+// and tags are community editable, which index.html already treats as an attack
+// surface for the HTML path, and this is the same data reaching a different
+// renderer. A leading apostrophe is the conventional defusal; spreadsheets read
+// the rest of the cell as literal text.
+const FORMULA_LEAD = /^[=+\-@\t\r]/
+
+// A leading minus is far more often a negative number than an attack, and
+// `gain` is reported in negative decibels, so quoting those would turn a real
+// column into text and break every sum drawn from it. Anything that parses as a
+// plain number is left to stand.
+const PLAIN_NUMBER = /^-?\d+(\.\d+)?$/
+
 //! Cell Serialisation
 function toCell(value) {
     if (value === null || value === undefined) return ''
@@ -62,9 +77,12 @@ function toCell(value) {
 }
 
 // RFC 4180: quote anything containing a delimiter, a quote or a line break, and
-// double up any embedded quotes.
+// double up any embedded quotes. Formula defusal runs first, so the apostrophe
+// it adds is inside the quoting rather than outside it.
 function escapeCell(value) {
-    const cell = toCell(value)
+    const raw = toCell(value)
+    const cell = FORMULA_LEAD.test(raw) && !PLAIN_NUMBER.test(raw) ? `'${raw}` : raw
+
     if (!/[",\r\n]/.test(cell)) return cell
     return `"${cell.replace(/"/g, '""')}"`
 }

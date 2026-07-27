@@ -37,6 +37,9 @@ function blankRow(query) {
         genreWeights: [],
         tags: [],
         mbRecordingId: null,
+        // Present on every row so the shape is uniform whether the song failed
+        // or not, rather than appearing only on the rows that went wrong.
+        error: null,
         ...acousticbrainz.emptyFeatures()
     }
 }

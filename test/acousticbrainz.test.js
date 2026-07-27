@@ -145,3 +145,58 @@ test('a stalled archive costs mood, not the song', async (t) => {
 
     assert.deepEqual(await features('rec-1'), emptyFeatures())
 })
+
+//! Classifiers Already In The Payload
+test('reads timbre and tonality, which arrive with the moods', () => {
+    const extracted = extractFeatures({
+        highlevel: {
+            timbre: { all: { bright: 0.78, dark: 0.22 }, probability: 0.78, value: 'bright' },
+            tonal_atonal: { all: { tonal: 0.94, atonal: 0.06 }, probability: 0.94, value: 'tonal' }
+        }
+    })
+
+    assert.equal(extracted.timbreBright, 0.78)
+    assert.equal(extracted.tonal, 0.94)
+})
+
+test('keeps the sign honest on timbre the same way it does on mood', () => {
+    // `probability` is confidence in whichever class won, so a dark track would
+    // read as overwhelmingly bright if that field were taken at face value.
+    const dark = extractFeatures({
+        highlevel: { timbre: { all: { bright: 0.12, dark: 0.88 }, probability: 0.88, value: 'dark' } }
+    })
+
+    assert.equal(dark.timbreBright, 0.12)
+})
+
+test('names the MIREX mood cluster rather than repeating its number', () => {
+    const extracted = extractFeatures({
+        highlevel: { moods_mirex: { value: 'Cluster5', probability: 0.4 } }
+    })
+
+    assert.equal(extracted.moodCluster, 'intense')
+})
+
+test('leaves an unrecognised cluster null rather than guessing', () => {
+    const extracted = extractFeatures({
+        highlevel: { moods_mirex: { value: 'Cluster9', probability: 0.4 } }
+    })
+
+    assert.equal(extracted.moodCluster, null)
+})
+
+test('ignores the ballroom rhythm classifier', () => {
+    // Trained on ballroom styles alone, so it has no way to answer "none of
+    // these" and files every rock song as a Quickstep. Same failure as genre.
+    const extracted = extractFeatures({
+        highlevel: { ismir04_rhythm: { value: 'VienneseWaltz', probability: 0.3 } }
+    })
+
+    assert.ok(!('rhythmStyle' in extracted))
+    assert.ok(!Object.values(extracted).includes('VienneseWaltz'))
+})
+
+test('carries the label fields in the empty shape too', () => {
+    assert.equal(emptyFeatures().moodCluster, null)
+    assert.ok('moodCluster' in emptyFeatures())
+})

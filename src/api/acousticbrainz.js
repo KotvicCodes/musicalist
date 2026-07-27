@@ -32,13 +32,43 @@ const FEATURES = {
     moodParty: ['mood_party', 'party'],
     moodAcoustic: ['mood_acoustic', 'acoustic'],
     moodElectronic: ['mood_electronic', 'electronic'],
-    instrumental: ['voice_instrumental', 'instrumental']
+    instrumental: ['voice_instrumental', 'instrumental'],
+    // Bright against dark, and tonal against atonal. Both are two-class models
+    // in the same response as the moods, read the same way, and neither falls
+    // under the exclusion below: they describe the sound rather than trying to
+    // name a category the model was never trained broadly enough to name.
+    timbreBright: ['timbre', 'bright'],
+    tonal: ['tonal_atonal', 'tonal']
+}
+
+// Multi-class models, where the answer is which label won rather than a
+// probability, so they cannot be read out of `all` the way the two-class models
+// above are.
+const LABELS = {
+    moodCluster: 'moods_mirex'
+}
+
+// MIREX names its classes Cluster1 to Cluster5, which says nothing on its own.
+// These are the adjectives each cluster was trained on, reduced to the one that
+// carries the group.
+const MOOD_CLUSTERS = {
+    Cluster1: 'rousing',
+    Cluster2: 'cheerful',
+    Cluster3: 'wistful',
+    Cluster4: 'quirky',
+    Cluster5: 'intense'
 }
 
 // The genre and gender classifiers are deliberately not read. They are trained
 // on small sets and are visibly unreliable: the archive files "Smells Like Teen
 // Spirit" as trance. MusicBrainz already supplies real genres with community
 // vote weights, so a worse second opinion would only muddy them.
+//
+// ismir04_rhythm is excluded for the same reason, and it is worth naming because
+// it looks useful at a glance. Its classes are ballroom dance styles, and it was
+// trained on nothing else, so it has no way to answer "none of these": every
+// rock song in a list comes back as a Quickstep or a Viennese Waltz. That is the
+// trance problem again, wearing a different label.
 
 //! Helpers
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -98,6 +128,7 @@ async function request(url, signal) {
 function emptyFeatures() {
     const empty = {}
     for (const key of Object.keys(FEATURES)) empty[key] = null
+    for (const key of Object.keys(LABELS)) empty[key] = null
     return empty
 }
 
@@ -106,6 +137,14 @@ function extractFeatures(body) {
     if (!highlevel) return emptyFeatures()
 
     const features = emptyFeatures()
+
+    for (const [field, classifier] of Object.entries(LABELS)) {
+        const entry = highlevel[classifier]
+        if (entry && typeof entry.value === 'string') {
+            features[field] = MOOD_CLUSTERS[entry.value] || null
+        }
+    }
+
     for (const [field, [classifier, positive]] of Object.entries(FEATURES)) {
         const entry = highlevel[classifier]
         if (!entry) continue
@@ -139,4 +178,4 @@ async function features(mbRecordingId, signal) {
 }
 
 //! Export
-module.exports = { features, extractFeatures, emptyFeatures, FEATURES }
+module.exports = { features, extractFeatures, emptyFeatures, FEATURES, LABELS }

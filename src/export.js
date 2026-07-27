@@ -21,6 +21,17 @@ const COLUMNS = [
     ['releaseSecondaryTypes', (row) => row.releaseSecondaryTypes],
     ['durationMs', (row) => row.durationMs],
     ['bpm', (row) => row.bpm],
+    // Probabilities from 0 to 1, blank where AcousticBrainz has no analysis for
+    // the recording. Blank rather than 0, which is a real score here.
+    ['danceability', (row) => row.danceability],
+    ['moodHappy', (row) => row.moodHappy],
+    ['moodSad', (row) => row.moodSad],
+    ['moodAggressive', (row) => row.moodAggressive],
+    ['moodRelaxed', (row) => row.moodRelaxed],
+    ['moodParty', (row) => row.moodParty],
+    ['moodAcoustic', (row) => row.moodAcoustic],
+    ['moodElectronic', (row) => row.moodElectronic],
+    ['instrumental', (row) => row.instrumental],
     ['explicit', (row) => row.explicit],
     ['trackNumber', (row) => row.trackNumber],
     ['discNumber', (row) => row.discNumber],
@@ -72,7 +83,7 @@ function toJson(rows, summary) {
     return JSON.stringify(
         {
             exportedAt: new Date().toISOString(),
-            source: 'Musicalist (Deezer API + MusicBrainz)',
+            source: 'Musicalist (Deezer API + MusicBrainz + AcousticBrainz)',
             summary: summary || null,
             songs: Array.isArray(rows) ? rows : []
         },

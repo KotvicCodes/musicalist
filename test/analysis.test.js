@@ -4,7 +4,9 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { summarise, formatDuration, effectiveYear } = require('../src/analysis.js')
+const { summarise, formatDuration, effectiveYear, MOOD_FIELDS } = require('../src/analysis.js')
+const { FEATURES } = require('../src/api/acousticbrainz.js')
+const { blankRow } = require('../src/api/lookup.js')
 const { songRow } = require('./helpers.js')
 
 //! Counts
@@ -223,4 +225,42 @@ test('counts distinct artists and the most frequent one', () => {
 
     assert.equal(summary.artists.distinct, 3)
     assert.deepEqual(summary.artists.top[0], { name: 'Queen', count: 2 })
+})
+
+//! Mood
+test('averages each mood over only the songs the archive covers', () => {
+    const summary = summarise([
+        songRow({ danceability: 0.8, moodHappy: 0.9 }),
+        songRow({ danceability: 0.4, moodHappy: 0.3 }),
+        songRow({ danceability: null, moodHappy: null })
+    ])
+
+    assert.equal(summary.moods.danceability, 0.6)
+    assert.equal(summary.moods.moodHappy, 0.6)
+    assert.equal(summary.audioAnalysed, 2)
+    assert.equal(summary.audioMissing, 1)
+})
+
+test('reports null rather than zero when nothing was analysed', () => {
+    // Zero would read as "every song scored zero danceability" instead of
+    // "no song had data", which is the same trap bpmMissing exists to avoid.
+    const summary = summarise([songRow({ danceability: null, moodHappy: null })])
+
+    assert.equal(summary.moods.danceability, null)
+    assert.equal(summary.moods.moodHappy, null)
+    assert.equal(summary.audioAnalysed, 0)
+    assert.equal(summary.audioMissing, 1)
+})
+
+test('does not count songs Deezer never found as missing analysis', () => {
+    const summary = summarise([songRow({ danceability: 0.5 }), blankRow('Nonsense')])
+
+    assert.equal(summary.audioAnalysed, 1)
+    assert.equal(summary.audioMissing, 0)
+})
+
+test('keeps the mood field list in step with the AcousticBrainz client', () => {
+    // analysis.js cannot require the client, because the renderer loads it as a
+    // plain script. This is what stops the two lists drifting apart.
+    assert.deepEqual(MOOD_FIELDS.slice().sort(), Object.keys(FEATURES).sort())
 })

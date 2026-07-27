@@ -5,8 +5,10 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron')
 const { lookupSongs } = require('./api/lookup.js')
 const { toCsv, toJson } = require('./export.js')
+const { isSafeExternalUrl } = require('./url.js')
 const fs = require('node:fs/promises')
 const path = require('node:path')
+const { pathToFileURL } = require('node:url')
 
 //! Logic
 
@@ -16,16 +18,37 @@ if (require('electron-squirrel-startup')) {
 }
 
 //* Create a browser window
+const PAGE = path.join(__dirname, 'index.html')
+
 const createWindow = () => {
     const win = new BrowserWindow({
         width: 900,
         height: 700,
         webPreferences: {
-            preload: path.join(__dirname, 'preload.js')
+            preload: path.join(__dirname, 'preload.js'),
+            // All three are Electron's defaults today. Pinned here so the app's
+            // posture is a decision this file makes, rather than a property of
+            // whichever Electron version happens to be installed.
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true
         }
     })
+
+    // The CSP in index.html governs what the page may load. It does not govern
+    // where the window may go, and neither of these paths is covered by it.
+    // Nothing in the renderer opens a window or navigates today; this is the
+    // same backstop the CSP comment describes for escaping, because either
+    // route would hand a remote origin a window carrying the preload bridge.
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+
+    const pageUrl = pathToFileURL(PAGE).href
+    win.webContents.on('will-navigate', (event, url) => {
+        if (url !== pageUrl) event.preventDefault()
+    })
+
     // load index.html
-    win.loadFile(path.join(__dirname, 'index.html'))
+    win.loadFile(PAGE)
 }
 
 app.whenReady().then(() => {
@@ -47,9 +70,11 @@ app.on('window-all-closed', () => {
 })
 
 //! Open External Links
-// Only allow http(s) so a stray value can never launch arbitrary schemes.
+// Only allow http(s) so a stray value can never launch arbitrary schemes. The
+// predicate lives in its own module so it can be tested against the schemes it
+// is supposed to refuse, which is not something reachable from here.
 ipcMain.handle('open-external', async (event, url) => {
-    if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
+    if (isSafeExternalUrl(url)) {
         await shell.openExternal(url)
     }
 })

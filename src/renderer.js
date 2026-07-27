@@ -73,10 +73,20 @@ scrapeButtonQ.addEventListener('click', async () => {
     statusQ.textContent = `Looking up ${songArray.length} song${songArray.length === 1 ? '' : 's'}…`
 
     try {
-        await window.electronAPI.runLookup(songArray)
-        const missed = rows.filter((row) => !row.found).length
-        statusQ.textContent = missed ? `Done. ${missed} not found.` : 'Done.'
+        const result = await window.electronAPI.runLookup(songArray)
+
+        if (result.ok) {
+            const missed = rows.filter((row) => !row.found).length
+            statusQ.textContent = missed ? `Done. ${missed} not found.` : 'Done.'
+        } else {
+            // Already a finished sentence written by whichever client failed,
+            // so it goes up as it is. Rows that arrived before the failure stay
+            // on screen and stay exportable.
+            statusQ.textContent = result.message
+        }
     } catch (err) {
+        // The handler returns its failures, so reaching here means the bridge
+        // itself is broken rather than the lookup.
         statusQ.textContent = `Something went wrong: ${err.message}`
     } finally {
         scrapeButtonQ.disabled = false
@@ -89,7 +99,14 @@ async function exportAs(format) {
     exportStatusQ.textContent = 'Saving…'
     try {
         const result = await window.electronAPI.exportResults(rows, summarise(rows), format)
-        exportStatusQ.textContent = result.saved ? `Saved ${result.fileName}.` : ''
+
+        if (result.saved) {
+            exportStatusQ.textContent = `Saved ${result.fileName}.`
+        } else {
+            // No reason means the user simply closed the save dialog, which
+            // needs no comment.
+            exportStatusQ.textContent = result.reason ? `Could not save: ${result.reason}.` : ''
+        }
     } catch (err) {
         exportStatusQ.textContent = `Could not save: ${err.message}`
     }

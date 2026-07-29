@@ -12,13 +12,49 @@ const { version } = require('../../package.json')
 const USER_AGENT = `Musicalist/${version} ( https://github.com/KotvicCodes/Musicalist )`
 const MIN_GAP_MS = 1100
 
+// Node's fetch never times out on its own, and a stalled request here would hold
+// the queue below shut for every remaining song. A song without genres is still
+// a useful row, so the deadline degrades to null like any other failure.
+const REQUEST_TIMEOUT_MS = 15000
+
+// MusicBrainz signals throttling with 503 and a "server is currently busy" body
+// rather than the 429 you would expect, so it arrives looking like an outage.
+// Treating it as one costs the row every genre, the original date and the
+// recording id, and the id is the key AcousticBrainz and ListenBrainz are
+// looked up by, so one throttled request quietly empties most of the row. The
+// gap above is meant to stay under the limit, but a shared address or a second
+// client on the same machine can still trip it, so it is worth waiting out.
+const BUSY_STATUS = 503
+const MAX_ATTEMPTS = 3
+const BUSY_WAIT_MS = 2000
+
 // A recording lookup with these includes returns genres, tags and the parent
 // release groups in a single response, so no follow-up call is needed.
-const RECORDING_INC = 'genres+tags+releases+release-groups'
+//
+// MusicBrainz charges per request rather than per byte, so the four added here
+// ride along on a call already being made and cost nothing in throttle time:
+// artist-credits gives artists as identities rather than a joined string,
+// artist-rels gives the production credits, url-rels gives the links out, and
+// isrcs gives every code for the recording rather than only the one Deezer
+// served, which matters because a remaster shares its original's ISRC.
+const RECORDING_INC = 'genres+tags+releases+release-groups+artist-credits+artist-rels+url-rels+isrcs'
 
 // How many genres and tags to keep once sorted by community vote count.
 const MAX_GENRES = 8
 const MAX_TAGS = 8
+
+// Production credits run long on well documented recordings, and past the first
+// handful they are session players rather than anything a summary would use.
+const MAX_CREDITS = 10
+
+// The links that lead somewhere a person would actually want to go. The rest
+// are streaming URLs for services this app does not touch.
+const LINK_TYPES = new Set(['wikidata', 'discogs', 'allmusic', 'secondhandsongs'])
+
+// Constructible from the release group id already in hand, so the canonical
+// artwork for the original release costs no request at all. Deezer's cover is
+// whichever reissue it happened to serve.
+const COVER_ART_BASE = 'https://coverartarchive.org/release-group'
 
 //! Helpers
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -49,18 +85,34 @@ function throttled(task) {
 //! Request
 // MusicBrainz failures are never fatal here: a song without genres is still a
 // useful row, so callers get null instead of an exception.
-async function request(url) {
-    return throttled(async () => {
+// `busyWaitMs` is overridable only so the retry path can be tested without
+// sitting out a real back off; nothing in the app passes it.
+async function request(url, signal, { attempt = 1, busyWaitMs = BUSY_WAIT_MS } = {}) {
+    const result = await throttled(async () => {
         try {
+            // The run's own signal and this request's deadline both have to be
+            // able to end the call, so they are combined into one.
+            const deadline = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
             const response = await fetch(url, {
-                headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' }
+                headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+                signal: signal ? AbortSignal.any([signal, deadline]) : deadline
             })
-            if (!response.ok) return null
-            return await response.json()
+
+            if (response.status === BUSY_STATUS) return { busy: true }
+            if (!response.ok) return { body: null }
+            return { body: await response.json() }
         } catch {
-            return null
+            return { body: null }
         }
     })
+
+    if (!result.busy) return result.body
+    if (attempt >= MAX_ATTEMPTS || (signal && signal.aborted)) return null
+
+    // Widening, because a throttle that is still on after two seconds is not
+    // going to clear in another two.
+    await sleep(busyWaitMs * attempt)
+    return request(url, signal, { attempt: attempt + 1, busyWaitMs })
 }
 
 //! Sorting
@@ -114,6 +166,60 @@ function canonicalReleaseGroup(releases) {
     })
 }
 
+//! Relations
+// artist-rels and url-rels both land in the same `relations` array, told apart
+// by target-type, so one pass over it serves both.
+
+// The production side of a recording: producer, engineer, mixer, and the
+// players credited by instrument. A dimension the app had nothing of, arriving
+// in a response it was already paying for.
+function productionCredits(relations) {
+    if (!Array.isArray(relations)) return []
+
+    const seen = new Set()
+    const credits = []
+    for (const relation of relations) {
+        if (!relation || relation['target-type'] !== 'artist') continue
+
+        const artist = relation.artist
+        if (!artist || !artist.name) continue
+
+        const role = relation.type || 'credited'
+        const key = `${artist.name}|${role}`
+        if (seen.has(key)) continue
+
+        seen.add(key)
+        credits.push({ name: artist.name, role })
+        if (credits.length >= MAX_CREDITS) break
+    }
+    return credits
+}
+
+function externalLinks(relations) {
+    const links = {}
+    if (!Array.isArray(relations)) return links
+
+    for (const relation of relations) {
+        if (!relation || relation['target-type'] !== 'url') continue
+        if (!LINK_TYPES.has(relation.type) || links[relation.type]) continue
+
+        const resource = relation.url && relation.url.resource
+        if (resource) links[relation.type] = resource
+    }
+    return links
+}
+
+// Artists as identities rather than a joined display string, so two spellings
+// of one name stop counting as two artists.
+function creditedArtists(artistCredit) {
+    if (!Array.isArray(artistCredit)) return []
+
+    return artistCredit
+        .map((entry) => entry && entry.artist)
+        .filter((artist) => artist && artist.name)
+        .map((artist) => ({ name: artist.name, id: artist.id || null }))
+}
+
 //! Extraction
 // Turn a recording lookup into the MusicBrainz half of a song row.
 function extractRecording(recording) {
@@ -124,7 +230,15 @@ function extractRecording(recording) {
         releaseSecondaryTypes: [],
         genreWeights: [],
         wikiGenres: [],
-        tags: []
+        tags: [],
+        disambiguation: null,
+        mbDurationMs: null,
+        isVideo: null,
+        mbArtists: [],
+        credits: [],
+        links: {},
+        mbIsrcs: [],
+        coverArtUrl: null
     }
     if (!recording || !recording.id) return empty
 
@@ -151,7 +265,23 @@ function extractRecording(recording) {
             group && Array.isArray(group['secondary-types']) ? group['secondary-types'] : [],
         genreWeights: genres,
         wikiGenres: genres.map((genre) => genre.name),
-        tags: tags.map((tag) => tag.name)
+        tags: tags.map((tag) => tag.name),
+        // MusicBrainz's own note on which recording this is: live, remix,
+        // acoustic version, radio edit. The app warns that an ambiguous query
+        // can land on a live take, and this is the field that says so outright.
+        disambiguation: recording.disambiguation || null,
+        // The canonical length, which is worth having next to Deezer's because
+        // a wide gap between the two is a wrong match showing itself.
+        mbDurationMs: typeof recording.length === 'number' ? recording.length : null,
+        isVideo: recording.video === true,
+        mbArtists: creditedArtists(recording['artist-credit']),
+        credits: productionCredits(recording.relations),
+        links: externalLinks(recording.relations),
+        // Every code MusicBrainz holds, not only the one Deezer served. A
+        // remaster and the pressing it was cut from share an ISRC, so the set
+        // is more informative than the single code.
+        mbIsrcs: Array.isArray(recording.isrcs) ? recording.isrcs : [],
+        coverArtUrl: group && group.id ? `${COVER_ART_BASE}/${group.id}/front` : null
     }
 }
 
@@ -198,33 +328,33 @@ function pickRecording(recordings) {
 // order. Taking the first entry therefore dated "Smells Like Teen Spirit" to the
 // 2021 remaster, which also carries none of the genres the 1991 recording has,
 // so the same ranking the search path uses picks between them.
-async function recordingIdFromIsrc(isrc) {
-    const body = await request(`${API_BASE}/isrc/${encodeURIComponent(isrc)}?fmt=json`)
+async function recordingIdFromIsrc(isrc, signal) {
+    const body = await request(`${API_BASE}/isrc/${encodeURIComponent(isrc)}?fmt=json`, signal)
     return pickRecording(body && body.recordings)
 }
 
 // Fallback for tracks with no ISRC, or an ISRC MusicBrainz has never seen.
-async function recordingIdFromSearch(title, artist) {
+async function recordingIdFromSearch(title, artist, signal) {
     if (!title) return null
 
     const parts = [`recording:"${escapeQuery(title)}"`]
     if (artist) parts.push(`artist:"${escapeQuery(artist)}"`)
 
     const params = new URLSearchParams({ fmt: 'json', limit: '25', query: parts.join(' AND ') })
-    const body = await request(`${API_BASE}/recording?${params}`)
+    const body = await request(`${API_BASE}/recording?${params}`, signal)
     return pickRecording(body && body.recordings)
 }
 
 //! Public Lookup
 // Two throttled requests per song: resolve the recording, then fetch it with
 // everything included.
-async function enrich({ isrc, title, artist }) {
+async function enrich({ isrc, title, artist, signal }) {
     let id = null
-    if (isrc) id = await recordingIdFromIsrc(isrc)
-    if (!id) id = await recordingIdFromSearch(title, artist)
+    if (isrc) id = await recordingIdFromIsrc(isrc, signal)
+    if (!id) id = await recordingIdFromSearch(title, artist, signal)
     if (!id) return extractRecording(null)
 
-    const recording = await request(`${API_BASE}/recording/${id}?fmt=json&inc=${RECORDING_INC}`)
+    const recording = await request(`${API_BASE}/recording/${id}?fmt=json&inc=${RECORDING_INC}`, signal)
     return extractRecording(recording)
 }
 
@@ -235,5 +365,8 @@ module.exports = {
     canonicalReleaseGroup,
     pickRecording,
     escapeQuery,
-    rankNamed
+    rankNamed,
+    request,
+    productionCredits,
+    externalLinks
 }

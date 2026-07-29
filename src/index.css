@@ -121,6 +121,26 @@ body {
     outline-offset: 1px;
 }
 
+.field__inline {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+}
+
+.field__select {
+    font: inherit;
+    font-size: 0.85rem;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.35rem 0.5rem;
+}
+
+.field__select:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
 /*! Buttons */
 
 .button {
@@ -152,11 +172,20 @@ body {
     filter: brightness(1.05);
 }
 
+/* Wraps rather than crushing the separator control when the status text is a
+   long sentence, such as a failure the user needs to read in full. */
 .actions {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
     margin-top: 0.9rem;
+}
+
+/* Pushes the status onto its own line once the row runs out of room, so it is
+   never the thing that gets squeezed. */
+.actions .status {
+    margin-left: auto;
 }
 
 .status {

@@ -134,6 +134,23 @@ test('averages the middle pair for an even count', () => {
     assert.equal(summary.medianDurationMs, 150_000)
 })
 
+test('reports a whole number of milliseconds whatever the list length', () => {
+    // An even count averages two middles and can land on a half. The rounding
+    // has to be the same on both branches, or the field's type depends on how
+    // many songs happen to be in the list.
+    const even = summarise([songRow({ durationMs: 100_001 }), songRow({ durationMs: 200_000 })])
+    const odd = summarise([
+        songRow({ durationMs: 100_001 }),
+        songRow({ durationMs: 200_000 }),
+        songRow({ durationMs: 300_000 })
+    ])
+
+    assert.ok(Number.isInteger(even.medianDurationMs))
+    assert.ok(Number.isInteger(odd.medianDurationMs))
+    assert.equal(even.medianDurationMs, 150_001)
+    assert.equal(odd.medianDurationMs, 200_000)
+})
+
 test('formats durations as minutes and seconds', () => {
     assert.equal(formatDuration(354_320), '5:54')
     assert.equal(formatDuration(61_000), '1:01')

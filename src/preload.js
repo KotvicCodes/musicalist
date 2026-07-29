@@ -8,6 +8,8 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
     runLookup: (songs) => ipcRenderer.invoke('run-lookup', { songs }),
+    // stop the run in progress; the rows already collected are kept
+    cancelLookup: () => ipcRenderer.invoke('cancel-lookup'),
     // subscribe to per-song streaming updates; returns an unsubscribe function
     onProgress: (callback) => {
         const listener = (_event, song) => callback(song)

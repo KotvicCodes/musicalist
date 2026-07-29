@@ -45,3 +45,40 @@ test('returns an empty list for empty input', () => {
     assert.deepEqual(textToArray(null), [])
     assert.deepEqual(textToArray(undefined), [])
 })
+
+//! Separator Choice
+// A comma is as likely to sit inside a title as between two, so the caller can
+// say which it meant and auto reads the text when it does not.
+test('auto keeps a title that contains a comma whole', () => {
+    assert.deepEqual(textToArray('Hey, Soul Sister\nHello, Goodbye'), [
+        'Hey, Soul Sister',
+        'Hello, Goodbye'
+    ])
+})
+
+test('an explicit comma splits a title that contains one', () => {
+    assert.deepEqual(textToArray('Hey, Soul Sister\nBillie Jean', 'comma'), [
+        'Hey',
+        'Soul Sister\nBillie Jean'
+    ])
+})
+
+test('an explicit new line ignores every comma', () => {
+    assert.deepEqual(textToArray('One, Two\nThree', 'newline'), ['One, Two', 'Three'])
+})
+
+test('splits on semicolons when asked', () => {
+    assert.deepEqual(textToArray('Hey, Soul Sister; Hello, Goodbye', 'semicolon'), [
+        'Hey, Soul Sister',
+        'Hello, Goodbye'
+    ])
+})
+
+test('falls back to reading the text when handed a separator it does not know', () => {
+    assert.deepEqual(textToArray('One, Two', 'pipe'), ['One', 'Two'])
+})
+
+test('still removes duplicates and empties whichever separator is used', () => {
+    assert.deepEqual(textToArray('One\n\nTwo\nOne\n', 'newline'), ['One', 'Two'])
+    assert.deepEqual(textToArray('One;;Two;One', 'semicolon'), ['One', 'Two'])
+})

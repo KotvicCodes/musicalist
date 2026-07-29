@@ -4,16 +4,29 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { lookupSongs, blankRow } = require('../src/api/lookup.js')
+const { lookupSongs, blankRow, compareDurations } = require('../src/api/lookup.js')
 const { response, stubFetch, deezerHit, deezerTrack, deezerAlbum } = require('./helpers.js')
 
 //! Helpers
 // One stub covering both services, so a run can be driven end to end. Songs are
 // keyed by the query they are found under.
-function stubEverything({ tracks = {}, mbDown = false, audio = null } = {}) {
+function stubEverything({ tracks = {}, mbDown = false, audio = null, listens = 0 } = {}) {
     return stubFetch((url) => {
+        if (url.includes('api.listenbrainz.org')) {
+            if (!listens) return response([])
+            return response([
+                { recording_mbid: 'rec-1', total_listen_count: listens, total_user_count: 12 }
+            ])
+        }
+
         if (url.includes('acousticbrainz.org')) {
             if (!audio) return response({ message: 'Not found' }, { status: 404 })
+            if (url.includes('/low-level')) {
+                return response({
+                    tonal: { key_key: 'B', key_scale: 'flat', key_strength: 0.7 },
+                    rhythm: { bpm: 143.2 }
+                })
+            }
             return response({
                 highlevel: {
                     danceability: {
@@ -29,7 +42,10 @@ function stubEverything({ tracks = {}, mbDown = false, audio = null } = {}) {
             if (url.includes('/search')) {
                 const query = new URL(url).searchParams.get('q')
                 const track = tracks[query]
-                return response({ data: track ? [deezerHit({ id: track.id })] : [] })
+                // Titled after the query, because Deezer's hits are now scored
+                // against it and a stub answering everything with the same song
+                // would be refused exactly as a real wrong hit is.
+                return response({ data: track ? [deezerHit({ id: track.id, title: query })] : [] })
             }
             if (url.includes('/track/')) {
                 const id = Number(url.split('/track/')[1])
@@ -68,6 +84,11 @@ test('a blank row carries every field the renderer reads', () => {
     assert.deepEqual(row.deezerGenres, [])
     assert.deepEqual(row.genreWeights, [])
     assert.deepEqual(row.artists, [])
+
+    // error is present on every row, not only the ones that went wrong, so the
+    // exporter reads one field rather than guarding against its absence
+    assert.ok('error' in row)
+    assert.equal(row.error, null)
 })
 
 //! Happy Path
@@ -220,4 +241,180 @@ test('a blank row carries the audio fields too, so every row is the same shape',
     assert.equal('moodHappy' in row, true)
     assert.equal('instrumental' in row, true)
     assert.equal(row.danceability, null)
+})
+
+//! Stopping
+// The signal is checked between songs and passed down into the requests, so a
+// stop lands without waiting out whatever was in flight.
+test('stops between songs and keeps what it already had', async (t) => {
+    const fetch = stubEverything({
+        tracks: { One: { id: 1 }, Two: { id: 2 }, Three: { id: 3 } }
+    })
+    t.after(fetch.restore)
+
+    const controller = new AbortController()
+    const rows = await lookupSongs(['One', 'Two', 'Three'], {
+        signal: controller.signal,
+        onProgress: () => controller.abort()
+    })
+
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0].found, true)
+})
+
+test('emits nothing at all for a run stopped before it started', async (t) => {
+    const fetch = stubEverything({ tracks: { One: { id: 1 } } })
+    t.after(fetch.restore)
+
+    const controller = new AbortController()
+    controller.abort()
+
+    const seen = []
+    const rows = await lookupSongs(['One'], {
+        signal: controller.signal,
+        onProgress: (row) => seen.push(row)
+    })
+
+    assert.deepEqual(rows, [])
+    assert.deepEqual(seen, [])
+    assert.equal(fetch.calls.length, 0)
+})
+
+test('a stopped request does not leave a row blaming the song', async (t) => {
+    const controller = new AbortController()
+
+    // Deezer rejects the way an aborted fetch does, once the run is stopped.
+    const fetch = stubFetch(() => {
+        controller.abort()
+        throw new DOMException('This operation was aborted', 'AbortError')
+    })
+    t.after(fetch.restore)
+
+    const rows = await lookupSongs(['One'], { signal: controller.signal })
+
+    assert.deepEqual(rows, [])
+})
+
+test('runs to the end when no signal is given at all', async (t) => {
+    const fetch = stubEverything({ tracks: { One: { id: 1 }, Two: { id: 2 } } })
+    t.after(fetch.restore)
+
+    const rows = await lookupSongs(['One', 'Two'])
+
+    assert.equal(rows.length, 2)
+})
+
+//! Duration Cross-check
+// Two independent sources disagreeing about the same recording is the cheapest
+// wrong-match signal available, and both numbers are already in hand.
+test('flags a wide gap between what Deezer served and what MusicBrainz holds', () => {
+    // a live take against the studio original
+    const wide = compareDurations(354_000, 412_000)
+
+    assert.equal(wide.durationGapMs, 58_000)
+    assert.equal(wide.durationDisagrees, true)
+})
+
+test('accepts the small gap two catalogues normally have', () => {
+    const close = compareDurations(354_000, 353_000)
+
+    assert.equal(close.durationGapMs, 1000)
+    assert.equal(close.durationDisagrees, false)
+})
+
+test('says nothing at all when either side has no duration', () => {
+    // false would read as "these agree", which is not what a missing number says
+    assert.deepEqual(compareDurations(354_000, null), {
+        durationGapMs: null,
+        durationDisagrees: null
+    })
+    assert.deepEqual(compareDurations(null, 354_000), {
+        durationGapMs: null,
+        durationDisagrees: null
+    })
+    assert.deepEqual(compareDurations(0, 354_000), { durationGapMs: null, durationDisagrees: null })
+})
+
+//! Musical Key
+test('asks the archive for the measured analysis once it knows there is one', async (t) => {
+    const fetch = stubEverything({ tracks: { Bohemian: deezerTrack() }, audio: { danceable: 0.82 } })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian'])
+
+    assert.equal(row.musicalKey, 'B flat')
+    assert.ok(fetch.calls.some((call) => call.url.includes('/rec-1/low-level')))
+})
+
+test('does not pay for a low-level call the archive cannot answer', async (t) => {
+    // The archive returns every classifier together or none at all, so a miss
+    // on the high-level call means the second request is wasted.
+    const fetch = stubEverything({ tracks: { Bohemian: deezerTrack() } })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian'])
+
+    assert.equal(row.musicalKey, null)
+    assert.ok(!fetch.calls.some((call) => call.url.includes('/low-level')))
+})
+
+test('falls back to the archive tempo only where Deezer has none', async (t) => {
+    const fetch = stubEverything({
+        tracks: { Bohemian: deezerTrack({ bpm: 0 }) },
+        audio: { danceable: 0.82 }
+    })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian'])
+
+    assert.equal(row.bpm, 143.2)
+    assert.equal(row.bpmSource, 'acousticbrainz')
+})
+
+test('prefers Deezer tempo where both have one, and says so', async (t) => {
+    const fetch = stubEverything({ tracks: { Bohemian: deezerTrack() }, audio: { danceable: 0.82 } })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian'])
+
+    assert.equal(row.bpm, 143.9)
+    assert.equal(row.bpmSource, 'deezer')
+})
+
+//! Popularity
+test('fetches popularity once for the whole run and merges it in', async (t) => {
+    const fetch = stubEverything({
+        tracks: { Bohemian: deezerTrack(), Another: deezerTrack({ id: 43, title: 'Another' }) },
+        listens: 91_204
+    })
+    t.after(fetch.restore)
+
+    const rows = await lookupSongs(['Bohemian', 'Another'])
+    const calls = fetch.calls.filter((call) => call.url.includes('api.listenbrainz.org'))
+
+    assert.equal(calls.length, 1)
+    assert.equal(rows[0].listenCount, 91_204)
+    assert.equal(rows[0].listenerCount, 12)
+})
+
+test('a popularity outage costs the counts, not the run', async (t) => {
+    const fetch = stubFetch((url) => {
+        if (url.includes('api.listenbrainz.org')) throw new Error('ECONNRESET')
+        if (url.includes('acousticbrainz.org')) return response({}, { status: 404 })
+        if (url.includes('api.deezer.com')) {
+            if (url.includes('/search')) {
+                return response({ data: [deezerHit({ title: 'Bohemian Rhapsody' })] })
+            }
+            if (url.includes('/track/')) return response(deezerTrack())
+            return response(deezerAlbum())
+        }
+        if (url.includes('/isrc/')) return response({ recordings: [{ id: 'rec-1' }] })
+        return response({ id: 'rec-1', genres: [], tags: [], releases: [] })
+    })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian Rhapsody'])
+
+    assert.equal(row.found, true)
+    assert.equal(row.listenCount, null)
 })

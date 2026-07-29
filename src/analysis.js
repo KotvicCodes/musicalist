@@ -8,6 +8,9 @@
     //! Constants
     const TOP_GENRES = 10
     const TOP_ARTISTS = 5
+    const TOP_KEYS = 5
+    const TOP_LABELS = 5
+    const TOP_VERSIONS = 5
 
     // Repeated rather than imported from the AcousticBrainz client, because the
     // renderer loads this file as a plain script and has no require(). A test
@@ -21,7 +24,9 @@
         'moodParty',
         'moodAcoustic',
         'moodElectronic',
-        'instrumental'
+        'instrumental',
+        'timbreBright',
+        'tonal'
     ]
 
     //! Helpers
@@ -60,13 +65,15 @@
             .map(([name, count]) => ({ name, count }))
     }
 
+    // The true median, left unrounded. Rounding only the even-length branch made
+    // the return type depend on how many songs were in the list, which is fine
+    // until a caller forgets to round and gets a fraction from one list and a
+    // whole number from the next. Each caller rounds to its own unit instead.
     function median(values) {
         if (values.length === 0) return null
         const sorted = values.slice().sort((a, b) => a - b)
         const middle = Math.floor(sorted.length / 2)
-        return sorted.length % 2 === 0
-            ? Math.round((sorted[middle - 1] + sorted[middle]) / 2)
-            : sorted[middle]
+        return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
     }
 
     //! Summary
@@ -171,6 +178,39 @@
         //* Artists
         const artistCounts = tally(found, (row) => (row.artists || []).map((artist) => artist.name))
 
+        // Deezer marks a guest credit Featured, which the app used to discard,
+        // so a list of collaborations read exactly like a list of solo tracks.
+        const featured = found.filter((row) =>
+            (row.artists || []).some((artist) => artist.role && artist.role !== 'Main')
+        ).length
+
+        //* Keys
+        // The archive's measured key. Same partial coverage as the moods, so the
+        // count of songs it could answer for travels with it.
+        const keyCounts = tally(found, (row) => (row.musicalKey ? [row.musicalKey] : []))
+
+        //* Labels
+        const labelCounts = tally(found, (row) => (row.label ? [row.label] : []))
+
+        //* Loudness
+        // ReplayGain is negative and a larger negative means a louder master, so
+        // the mean reads directly as how hard this list was mastered.
+        const gains = found.map((row) => row.gainDb).filter((value) => typeof value === 'number')
+
+        //* Popularity
+        const listens = found.map((row) => row.listenCount).filter((value) => typeof value === 'number')
+
+        //* Versions
+        // How much of the list is the actual studio recording, as opposed to a
+        // live take, a remix or an edit standing in for one.
+        const versioned = found.filter((row) => row.disambiguation)
+
+        //* Suspected mismatches
+        // Deezer and MusicBrainz disagreeing about the length of what should be
+        // the same recording. Costs nothing to compute and points at the rows
+        // worth checking by hand.
+        const mismatched = found.filter((row) => row.durationDisagrees === true).length
+
         return {
             total: all.length,
             found: found.length,
@@ -184,7 +224,7 @@
             },
             topGenres,
             meanDurationMs,
-            medianDurationMs: median(durations),
+            medianDurationMs: durations.length ? Math.round(median(durations)) : null,
             meanBpm,
             // Deezer reports a fractional tempo; whole numbers read better and
             // the tenths carry no meaning to someone scanning a summary.
@@ -200,8 +240,35 @@
             releaseTypes: topOf(releaseTypes, releaseTypes.size),
             artists: {
                 distinct: artistCounts.size,
-                top: topOf(artistCounts, TOP_ARTISTS)
-            }
+                top: topOf(artistCounts, TOP_ARTISTS),
+                featured
+            },
+            keys: {
+                top: topOf(keyCounts, TOP_KEYS),
+                analysed: keyCounts.size ? [...keyCounts.values()].reduce((a, b) => a + b, 0) : 0
+            },
+            labels: {
+                distinct: labelCounts.size,
+                top: topOf(labelCounts, TOP_LABELS)
+            },
+            loudness: {
+                meanGainDb: gains.length
+                    ? Math.round((gains.reduce((sum, value) => sum + value, 0) / gains.length) * 10) / 10
+                    : null,
+                measured: gains.length
+            },
+            popularity: {
+                medianListens: listens.length ? Math.round(median(listens)) : null,
+                measured: listens.length
+            },
+            versions: {
+                count: versioned.length,
+                top: topOf(
+                    tally(versioned, (row) => [row.disambiguation]),
+                    TOP_VERSIONS
+                )
+            },
+            mismatched
         }
     }
 

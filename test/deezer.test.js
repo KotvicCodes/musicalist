@@ -5,7 +5,14 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 
 const { createClient, mapTrack, request, DeezerError } = require('../src/api/deezer.js')
-const { response, stubFetch, deezerHit, deezerTrack, deezerAlbum } = require('./helpers.js')
+const {
+    response,
+    stubFetch,
+    stubHangingFetch,
+    deezerHit,
+    deezerTrack,
+    deezerAlbum
+} = require('./helpers.js')
 
 //! Helpers
 // Routes the three endpoints a single search touches. Any of them can be told
@@ -75,20 +82,6 @@ test('joins every credited artist, not just the first', () => {
     assert.equal(mapped.artists[1].name, 'David Bowie')
 })
 
-test('counts an artist credited under two roles only once', () => {
-    const mapped = mapTrack(
-        deezerTrack({
-            contributors: [
-                { id: 1, name: 'Queen', role: 'Main' },
-                { id: 1, name: 'Queen', role: 'Featured' }
-            ]
-        })
-    )
-
-    assert.equal(mapped.artists.length, 1)
-    assert.equal(mapped.author, 'Queen')
-})
-
 test('falls back to the single artist when there are no contributors', () => {
     const mapped = mapTrack(deezerHit())
 
@@ -132,15 +125,16 @@ test('searches, then fetches the track and its album', async (t) => {
     assert.equal(fetch.calls.length, 3)
 })
 
-test('sends the query and a limit of one', async (t) => {
-    const fetch = stubDeezer()
+test('sends the query and asks for several candidates', async (t) => {
+    const fetch = stubDeezer({ hits: [deezerHit({ title: 'Billie Jean' })] })
     t.after(fetch.restore)
 
     await createClient().searchTrack('Billie Jean')
     const searchUrl = fetch.calls[0].url
 
     assert.match(searchUrl, /q=Billie\+Jean/)
-    assert.match(searchUrl, /limit=1/)
+    // several, so the scorer has a real choice; only the winner costs a call
+    assert.match(searchUrl, /limit=5/)
 })
 
 test('returns null when the search finds nothing', async (t) => {
@@ -181,14 +175,78 @@ test('an album that cannot be read still yields the track', async (t) => {
 })
 
 test('caches album lookups within a run', async (t) => {
-    const fetch = stubDeezer()
+    // Both songs have to actually be found, and both have to come off the same
+    // album, or this passes without the cache ever being consulted.
+    const fetch = stubFetch((url) => {
+        if (url.includes('/search')) {
+            const query = new URL(`https://api.deezer.com${url.split('api.deezer.com')[1]}`)
+            return response({ data: [deezerHit({ title: query.searchParams.get('q') })] })
+        }
+        if (url.includes('/track/')) return response(deezerTrack())
+        return response(deezerAlbum())
+    })
     t.after(fetch.restore)
 
     const deezer = createClient()
-    await deezer.searchTrack('Bohemian Rhapsody')
-    await deezer.searchTrack('Love of My Life')
+    const first = await deezer.searchTrack('Bohemian Rhapsody')
+    const second = await deezer.searchTrack('Love of My Life')
 
+    assert.ok(first)
+    assert.ok(second)
+    assert.equal(fetch.calls.filter((call) => call.url.includes('/track/')).length, 2)
     assert.equal(fetch.calls.filter((call) => call.url.includes('/album/')).length, 1)
+})
+
+//! Match Scoring
+test('picks the candidate that answers the query, not the first', async (t) => {
+    const fetch = stubDeezer({
+        hits: [
+            deezerHit({
+                id: 1,
+                title: 'Billie Jean Karaoke Tribute',
+                artist: { id: 9, name: 'Party Hits' }
+            }),
+            deezerHit({ id: 2, title: 'Billie Jean', artist: { id: 3, name: 'Michael Jackson' } })
+        ],
+        track: deezerTrack({ id: 2, title: 'Billie Jean' })
+    })
+    t.after(fetch.restore)
+
+    const track = await createClient().searchTrack('Billie Jean Michael Jackson')
+
+    assert.equal(track.title, 'Billie Jean')
+    assert.ok(fetch.calls.some((call) => call.url.includes('/track/2')))
+})
+
+test('reports how well the answer matched the query', async (t) => {
+    const fetch = stubDeezer({ hits: [deezerHit({ title: 'Bohemian Rhapsody' })] })
+    t.after(fetch.restore)
+
+    const track = await createClient().searchTrack('Bohemian Rhapsody')
+
+    assert.equal(track.matchConfidence, 'high')
+    assert.equal(track.matchScore, 1)
+})
+
+test('refuses a confident wrong song rather than presenting it as found', async (t) => {
+    // Deezer answers every query with its closest guess, so this is what a
+    // nonsense query actually gets back.
+    const fetch = stubDeezer({ hits: [deezerHit({ title: 'Bohemian Rhapsody' })] })
+    t.after(fetch.restore)
+
+    assert.equal(await createClient().searchTrack('asdkjhaskdjh'), null)
+    // and it never paid for the detail call
+    assert.equal(fetch.calls.length, 1)
+})
+
+test('keeps a near miss but says it is one', async (t) => {
+    const fetch = stubDeezer({ hits: [deezerHit({ title: 'Bohemian Rhapsody' })] })
+    t.after(fetch.restore)
+
+    const track = await createClient().searchTrack('Bohemain Rhapsody')
+
+    assert.ok(track)
+    assert.equal(track.matchConfidence, 'low')
 })
 
 //! Errors
@@ -221,8 +279,10 @@ test('does not mistake a 200 carrying an error body for a result', async (t) => 
 
 test('retries a quota rejection and then succeeds', async (t) => {
     let attempts = 0
-    const fetch = stubFetch(() => {
+    const fetch = stubFetch((_url, options) => {
         attempts += 1
+        // the retry carries its own deadline, like any other request
+        assert.ok(options.signal instanceof AbortSignal)
         if (attempts === 1) return response({ error: { type: 'Exception', code: 4 } })
         return response(deezerTrack())
     })
@@ -254,4 +314,92 @@ test('reports an HTTP failure with its status', async (t) => {
     t.after(fetch.restore)
 
     await assert.rejects(() => createClient().searchTrack('Anything'), { status: 503 })
+})
+
+//! Deadlines
+// A connection that opens and then goes quiet is the one failure no status code
+// describes, and the one Node's fetch will wait on forever.
+test('gives up on a request that is accepted and then never answered', async (t) => {
+    const fetch = stubHangingFetch()
+    t.after(fetch.restore)
+
+    await assert.rejects(() => request('/track/42', { timeoutMs: 300 }), { kind: 'timeout' })
+})
+
+test('sends a deadline with every request', async (t) => {
+    const fetch = stubDeezer()
+    t.after(fetch.restore)
+
+    await createClient().searchTrack('Bohemian Rhapsody')
+
+    assert.ok(fetch.calls.length > 0)
+    for (const call of fetch.calls) {
+        assert.ok(call.options.signal instanceof AbortSignal)
+    }
+})
+
+//! Fields Already In The Payload
+// Each of these arrived in a response the app was already paying for and was
+// being thrown away.
+test('keeps the popularity score and the measured gain', () => {
+    const mapped = mapTrack(deezerTrack(), deezerAlbum())
+
+    assert.equal(mapped.popularity, 892_145)
+    assert.equal(mapped.gainDb, -8.2)
+})
+
+test('treats a missing rank or gain as unknown, not as zero', () => {
+    // 0 is a real gain and a real rank, so a gap filled with it would be
+    // indistinguishable from a track that measured there.
+    const mapped = mapTrack(deezerTrack({ rank: undefined, gain: undefined }), deezerAlbum())
+
+    assert.equal(mapped.popularity, null)
+    assert.equal(mapped.gainDb, null)
+})
+
+test('keeps a gain of zero, which is a real measurement', () => {
+    assert.equal(mapTrack(deezerTrack({ gain: 0 }), deezerAlbum()).gainDb, 0)
+})
+
+test('reads the label and barcode off the album', () => {
+    const mapped = mapTrack(deezerTrack(), deezerAlbum())
+
+    assert.equal(mapped.label, 'EMI')
+    assert.equal(mapped.upc, '0602527664972')
+})
+
+test('tells an unrated track apart from a clean one', () => {
+    // the boolean folds both into false, which is what this field is for
+    assert.equal(mapTrack(deezerTrack({ explicit_content_lyrics: 0 })).explicitLyrics, 'clean')
+    assert.equal(mapTrack(deezerTrack({ explicit_content_lyrics: 1 })).explicitLyrics, 'explicit')
+    assert.equal(mapTrack(deezerTrack({ explicit_content_lyrics: 2 })).explicitLyrics, 'unknown')
+    assert.equal(mapTrack(deezerTrack({ explicit_content_lyrics: 3 })).explicitLyrics, 'edited')
+})
+
+test('keeps the role that says which artist led', () => {
+    const mapped = mapTrack(
+        deezerTrack({
+            contributors: [
+                { id: 1, name: 'Queen', role: 'Main' },
+                { id: 2, name: 'David Bowie', role: 'Featured' }
+            ]
+        })
+    )
+
+    assert.equal(mapped.artists[0].role, 'Main')
+    assert.equal(mapped.artists[1].role, 'Featured')
+})
+
+test('keeps the first role when one artist is credited twice', () => {
+    const mapped = mapTrack(
+        deezerTrack({
+            contributors: [
+                { id: 1, name: 'Queen', role: 'Main' },
+                { id: 1, name: 'Queen', role: 'Featured' }
+            ]
+        })
+    )
+
+    assert.equal(mapped.artists.length, 1)
+    assert.equal(mapped.artists[0].role, 'Main')
 })

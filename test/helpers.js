@@ -35,6 +35,54 @@ function stubFetch(handler) {
     }
 }
 
+//! Hanging Fetch Stub
+// A server that accepts the connection and then says nothing, which is the case
+// no status code and no thrown error can describe. Rejects with the signal's own
+// reason once the deadline fires, exactly as the real fetch does.
+//
+// The ceiling is not a second deadline to test against, it is the thing keeping
+// Node's event loop alive. A real pending request holds an open socket;
+// AbortSignal.timeout's own timer is unref'd and holds nothing, so without a
+// handle here the loop drains and the runner cancels the test before the very
+// deadline it is meant to be proving ever fires. It is set far past any deadline
+// under test, so reaching it means no deadline was attached at all.
+const NEVER_ANSWERED_CEILING_MS = 5000
+
+function stubHangingFetch() {
+    const original = globalThis.fetch
+    const calls = []
+
+    globalThis.fetch = async (url, options = {}) => {
+        calls.push({ url: String(url), options, at: Date.now() })
+        return new Promise((_resolve, reject) => {
+            const ceiling = setTimeout(
+                () => reject(new Error('no deadline ever fired on this request')),
+                NEVER_ANSWERED_CEILING_MS
+            )
+            const fail = (reason) => {
+                clearTimeout(ceiling)
+                reject(reason)
+            }
+
+            const { signal } = options
+            if (!signal) return
+            // The throttle can hold a request back longer than its own deadline,
+            // in which case the signal is already spent by the time fetch sees
+            // it. Real fetch rejects straight away rather than waiting for an
+            // abort event that has already been and gone.
+            if (signal.aborted) return fail(signal.reason)
+            signal.addEventListener('abort', () => fail(signal.reason), { once: true })
+        })
+    }
+
+    return {
+        calls,
+        restore: () => {
+            globalThis.fetch = original
+        }
+    }
+}
+
 //! Fixtures
 
 // What GET /search returns per hit: no bpm, no release date, one artist only.
@@ -66,7 +114,11 @@ function deezerTrack(overrides = {}) {
         track_position: 11,
         disk_number: 1,
         bpm: 143.9,
-        contributors: [{ id: 1, name: 'Queen', link: 'https://www.deezer.com/artist/1' }],
+        rank: 892_145,
+        gain: -8.2,
+        preview: 'https://cdn.deezer.com/preview/42.mp3',
+        explicit_content_lyrics: 0,
+        contributors: [{ id: 1, name: 'Queen', link: 'https://www.deezer.com/artist/1', role: 'Main' }],
         ...overrides
     }
 }
@@ -77,6 +129,8 @@ function deezerAlbum(overrides = {}) {
         title: 'A Night at the Opera',
         record_type: 'album',
         nb_tracks: 12,
+        label: 'EMI',
+        upc: '0602527664972',
         release_date: '2011-01-01',
         genres: { data: [{ id: 152, name: 'Rock' }] },
         cover_big: 'https://img/big.jpg',
@@ -119,4 +173,12 @@ function songRow(overrides = {}) {
     }
 }
 
-module.exports = { response, stubFetch, deezerHit, deezerTrack, deezerAlbum, songRow }
+module.exports = {
+    response,
+    stubFetch,
+    stubHangingFetch,
+    deezerHit,
+    deezerTrack,
+    deezerAlbum,
+    songRow
+}

@@ -1,8 +1,16 @@
 // SPDX-FileCopyrightText: 2025-2026 Kotvič
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+//! Import
+const { pickBestHit } = require('../match.js')
+
 //! Constants
 const API_BASE = 'https://api.deezer.com'
+
+// Enough candidates for the scorer to have a real choice, and few enough that
+// the response stays small. Only the winner costs a follow-up call, so this is
+// free in requests.
+const SEARCH_LIMIT = 5
 
 // Deezer's public API needs no key and allows 50 requests per 5 seconds per IP.
 // A 110 ms gap works out to about 45 in any 5 second window, which keeps a long
@@ -21,6 +29,26 @@ const NO_DATA_CODE = 800
 // Deezer uses this for "release date unknown" rather than omitting the field.
 const NULL_DATE = '0000-00-00'
 
+// The boolean `explicit_lyrics` folds "nobody has said" into "no". This is the
+// field that keeps them apart, so an unrated track stops counting as clean.
+const EXPLICIT_CONTENT = {
+    0: 'clean',
+    1: 'explicit',
+    2: 'unknown',
+    3: 'edited',
+    4: 'partially explicit',
+    5: 'partially unknown',
+    6: 'unrated',
+    7: 'partially unrated'
+}
+
+// Node's fetch has no timeout of its own, so a socket that opens and then goes
+// quiet never settles. That would wedge the queue below forever and leave the
+// run with no exit but quitting the app. A timeout fails only its own song
+// rather than the run, because one slow answer is not a dead connection; a
+// genuinely dead one is what the Stop button is for.
+const REQUEST_TIMEOUT_MS = 15000
+
 //! Errors
 // `kind` lets callers tell a dead connection apart from one bad song without
 // ever echoing a response body to the screen.
@@ -35,6 +63,12 @@ class DeezerError extends Error {
 
 //! Helpers
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// An aborted fetch and an aborted body read both surface as the signal's own
+// reason, so the two call sites ask the same question.
+function isTimeout(err) {
+    return err && (err.name === 'TimeoutError' || err.name === 'AbortError')
+}
 
 //! Throttle
 // A private queue, deliberately not shared with MusicBrainz: the two services
@@ -63,14 +97,28 @@ function throttled(task) {
 // Returns the parsed body, or null when Deezer knows nothing about the id.
 // Anything else throws, so the caller can decide whether to fail the song or
 // the whole run.
-// `quotaWaitMs` is overridable only so the retry path can be tested without
-// sleeping through a real quota window; nothing in the app passes it.
-async function request(path, { attempt = 1, quotaWaitMs = QUOTA_WAIT_MS } = {}) {
+// `quotaWaitMs` and `timeoutMs` are overridable only so the retry and timeout
+// paths can be tested without sleeping through a real quota window or a real
+// deadline; nothing in the app passes either.
+async function request(
+    path,
+    { attempt = 1, quotaWaitMs = QUOTA_WAIT_MS, timeoutMs = REQUEST_TIMEOUT_MS, signal } = {}
+) {
     const body = await throttled(async () => {
+        // Two things may end this call: the run being stopped, and the deadline
+        // running out. Combining them means a request already in flight when
+        // Stop is pressed drops immediately, rather than the run waiting out
+        // whatever it was in the middle of.
+        const deadline = AbortSignal.timeout(timeoutMs)
+        const combined = signal ? AbortSignal.any([signal, deadline]) : deadline
+
         let response
         try {
-            response = await fetch(`${API_BASE}${path}`)
-        } catch {
+            response = await fetch(`${API_BASE}${path}`, { signal: combined })
+        } catch (err) {
+            if (isTimeout(err)) {
+                throw new DeezerError('Deezer did not answer in time.', { kind: 'timeout' })
+            }
             throw new DeezerError('Could not reach Deezer. Check your internet connection.', {
                 kind: 'network'
             })
@@ -82,9 +130,14 @@ async function request(path, { attempt = 1, quotaWaitMs = QUOTA_WAIT_MS } = {}) 
             })
         }
 
+        // The signal covers the body stream too, so a response that starts and
+        // then stalls mid-download lands here rather than hanging.
         try {
             return await response.json()
-        } catch {
+        } catch (err) {
+            if (isTimeout(err)) {
+                throw new DeezerError('Deezer did not answer in time.', { kind: 'timeout' })
+            }
             throw new DeezerError('Deezer sent a response this app could not read.')
         }
     })
@@ -102,8 +155,14 @@ async function request(path, { attempt = 1, quotaWaitMs = QUOTA_WAIT_MS } = {}) 
                 kind: 'rate-limit'
             })
         }
+        // No point sitting out a five second quota window for a run that has
+        // already been stopped.
+        if (signal && signal.aborted) {
+            throw new DeezerError('The run was stopped.', { kind: 'cancelled' })
+        }
+
         await sleep(quotaWaitMs)
-        return request(path, { attempt: attempt + 1, quotaWaitMs })
+        return request(path, { attempt: attempt + 1, quotaWaitMs, timeoutMs, signal })
     }
 
     throw new DeezerError(`Deezer rejected the request (${error.type || 'error'}).`)
@@ -116,7 +175,8 @@ function cleanDate(value) {
 
 // The track detail carries a `contributors` list covering features and
 // collaborations; the leaner search result only has a single `artist`. One
-// artist can appear twice under two roles, so dedupe on the way through.
+// artist can appear twice under two roles, so dedupe on the way through and
+// keep the first role, which is the primary credit.
 function creditedArtists(track) {
     const source =
         Array.isArray(track.contributors) && track.contributors.length
@@ -132,7 +192,14 @@ function creditedArtists(track) {
         const key = artist.id ?? artist.name
         if (seen.has(key)) continue
         seen.add(key)
-        artists.push({ name: artist.name, id: artist.id ?? null, url: artist.link || null })
+        artists.push({
+            name: artist.name,
+            id: artist.id ?? null,
+            url: artist.link || null,
+            // Main or Featured. Read but previously discarded, which left the
+            // app unable to tell a lead artist from a guest.
+            role: artist.role || null
+        })
     }
     return artists
 }
@@ -163,10 +230,27 @@ function mapTrack(track, album) {
         explicit: typeof track.explicit_lyrics === 'boolean' ? track.explicit_lyrics : null,
         trackNumber: typeof track.track_position === 'number' ? track.track_position : null,
         discNumber: typeof track.disk_number === 'number' ? track.disk_number : null,
+        // Deezer's four-value rating, where the boolean above cannot tell an
+        // unrated track apart from a clean one.
+        explicitLyrics: EXPLICIT_CONTENT[track.explicit_content_lyrics] || null,
         isrc: track.isrc || null,
         deezerUrl: track.link || null,
         // 0 is Deezer's "not analysed", not a track that stands still
         bpm: typeof track.bpm === 'number' && track.bpm > 0 ? track.bpm : null,
+        // Deezer's own popularity score, 0 to 1,000,000. The only axis in the
+        // app that says how widely known a song is rather than what it sounds
+        // like, which is what separates a deep cut from a single.
+        popularity: typeof track.rank === 'number' ? track.rank : null,
+        // ReplayGain in decibels, so negative, and larger negatives mean a
+        // louder master. This is measured rather than classified, which makes
+        // it the one honest answer to the energy question AcousticBrainz
+        // cannot answer, and across a list it reads as loudness war era.
+        gainDb: typeof track.gain === 'number' ? track.gain : null,
+        previewUrl: track.preview || null,
+        // The label that put the record out. Absent from the app until now, and
+        // label concentration is one of the more telling things about a list.
+        label: detail.label || null,
+        upc: detail.upc || null,
         deezerGenres: Array.isArray(detail.genres && detail.genres.data)
             ? detail.genres.data.map((genre) => genre && genre.name).filter(Boolean)
             : [],
@@ -180,34 +264,46 @@ function mapTrack(track, album) {
 function createClient() {
     const albumCache = new Map()
 
-    async function getAlbum(id) {
+    async function getAlbum(id, signal) {
         if (!id) return null
         if (albumCache.has(id)) return albumCache.get(id)
 
         // Genres and the album type are enrichment, not the point of the row,
         // so a failure here must not cost the song.
-        const album = await request(`/album/${encodeURIComponent(id)}`).catch(() => null)
+        const album = await request(`/album/${encodeURIComponent(id)}`, { signal }).catch(() => null)
         albumCache.set(id, album)
         return album
     }
 
     return {
-        // Returns the mapped track, or null when Deezer knows nothing about it.
-        async searchTrack(query) {
-            const params = new URLSearchParams({ q: query, limit: '1' })
-            const found = await request(`/search?${params}`)
+        // Returns the mapped track, or null when nothing Deezer offered is a
+        // credible answer to the query.
+        async searchTrack(query, { signal } = {}) {
+            const params = new URLSearchParams({ q: query, limit: String(SEARCH_LIMIT) })
+            const found = await request(`/search?${params}`, { signal })
 
             const items = found && Array.isArray(found.data) ? found.data : []
             if (items.length === 0) return null
-            const hit = items[0]
+
+            // Deezer ranks by its own relevance and never says how close the
+            // top hit actually was, so the candidates are scored against what
+            // was asked for. Only the winner costs a detail call, so asking for
+            // several hits does not cost a request.
+            const best = pickBestHit(query, items)
+            if (!best) return null
 
             // The search payload omits bpm, the release date and the full
             // credits, so the detail call is what makes the row worth having.
             // If it comes back empty the search hit still stands on its own.
-            const track = (await request(`/track/${encodeURIComponent(hit.id)}`)) || hit
-            const album = await getAlbum((track.album && track.album.id) || null)
+            const id = best.hit.id
+            const track = (await request(`/track/${encodeURIComponent(id)}`, { signal })) || best.hit
+            const album = await getAlbum((track.album && track.album.id) || null, signal)
 
-            return mapTrack(track, album)
+            return {
+                ...mapTrack(track, album),
+                matchScore: best.score,
+                matchConfidence: best.confidence
+            }
         }
     }
 }

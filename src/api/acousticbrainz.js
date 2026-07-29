@@ -13,6 +13,11 @@ const USER_AGENT = `Musicalist/${version} ( https://github.com/KotvicCodes/Music
 // binds; it exists so a future caller cannot accidentally hammer the service.
 const MIN_GAP_MS = 250
 
+// Same reasoning as the other two clients: Node's fetch has no deadline of its
+// own, and mood is the most optional data in the app, so a slow answer should
+// cost the row its mood rather than cost the run its progress.
+const REQUEST_TIMEOUT_MS = 10000
+
 // Every classifier is a two-class model, and `all` carries the probability of
 // each class by name. Reading the positive class straight out of `all` is what
 // keeps the sign honest: the sibling `probability` field is confidence in
@@ -27,13 +32,43 @@ const FEATURES = {
     moodParty: ['mood_party', 'party'],
     moodAcoustic: ['mood_acoustic', 'acoustic'],
     moodElectronic: ['mood_electronic', 'electronic'],
-    instrumental: ['voice_instrumental', 'instrumental']
+    instrumental: ['voice_instrumental', 'instrumental'],
+    // Bright against dark, and tonal against atonal. Both are two-class models
+    // in the same response as the moods, read the same way, and neither falls
+    // under the exclusion below: they describe the sound rather than trying to
+    // name a category the model was never trained broadly enough to name.
+    timbreBright: ['timbre', 'bright'],
+    tonal: ['tonal_atonal', 'tonal']
+}
+
+// Multi-class models, where the answer is which label won rather than a
+// probability, so they cannot be read out of `all` the way the two-class models
+// above are.
+const LABELS = {
+    moodCluster: 'moods_mirex'
+}
+
+// MIREX names its classes Cluster1 to Cluster5, which says nothing on its own.
+// These are the adjectives each cluster was trained on, reduced to the one that
+// carries the group.
+const MOOD_CLUSTERS = {
+    Cluster1: 'rousing',
+    Cluster2: 'cheerful',
+    Cluster3: 'wistful',
+    Cluster4: 'quirky',
+    Cluster5: 'intense'
 }
 
 // The genre and gender classifiers are deliberately not read. They are trained
 // on small sets and are visibly unreliable: the archive files "Smells Like Teen
 // Spirit" as trance. MusicBrainz already supplies real genres with community
 // vote weights, so a worse second opinion would only muddy them.
+//
+// ismir04_rhythm is excluded for the same reason, and it is worth naming because
+// it looks useful at a glance. Its classes are ballroom dance styles, and it was
+// trained on nothing else, so it has no way to answer "none of these": every
+// rock song in a list comes back as a Quickstep or a Viennese Waltz. That is the
+// trance problem again, wearing a different label.
 
 //! Helpers
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -68,11 +103,15 @@ function throttled(task) {
 // useful row, so every failure resolves to null instead of throwing. A 404 is
 // the ordinary case here rather than an error, since the archive only holds
 // what volunteers submitted before it closed to new data.
-async function request(url) {
+async function request(url, signal) {
     return throttled(async () => {
         try {
+            // The run's own signal and this request's deadline both have to be
+            // able to end the call, so they are combined into one.
+            const deadline = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
             const response = await fetch(url, {
-                headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' }
+                headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+                signal: signal ? AbortSignal.any([signal, deadline]) : deadline
             })
             if (!response.ok) return null
             return await response.json()
@@ -89,6 +128,7 @@ async function request(url) {
 function emptyFeatures() {
     const empty = {}
     for (const key of Object.keys(FEATURES)) empty[key] = null
+    for (const key of Object.keys(LABELS)) empty[key] = null
     return empty
 }
 
@@ -97,6 +137,14 @@ function extractFeatures(body) {
     if (!highlevel) return emptyFeatures()
 
     const features = emptyFeatures()
+
+    for (const [field, classifier] of Object.entries(LABELS)) {
+        const entry = highlevel[classifier]
+        if (entry && typeof entry.value === 'string') {
+            features[field] = MOOD_CLUSTERS[entry.value] || null
+        }
+    }
+
     for (const [field, [classifier, positive]] of Object.entries(FEATURES)) {
         const entry = highlevel[classifier]
         if (!entry) continue
@@ -117,17 +165,80 @@ function extractFeatures(body) {
     return features
 }
 
+//! Low Level Analysis
+// The measured half of the archive, as opposed to the classified half above.
+// Key is the single biggest musical fact the app was missing: it reported tempo
+// but never what a song was in, and key distribution across a list is what
+// anyone actually building a set wants to know.
+function emptyAnalysis() {
+    return {
+        musicalKey: null,
+        keyStrength: null,
+        archiveBpm: null,
+        loudness: null,
+        dynamicComplexity: null,
+        beatsCount: null
+    }
+}
+
+function extractAnalysis(body) {
+    if (!body) return emptyAnalysis()
+
+    const tonal = body.tonal || {}
+    const rhythm = body.rhythm || {}
+    const lowlevel = body.lowlevel || {}
+
+    const number = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null)
+
+    return {
+        // "A minor" rather than the two fields it arrives in, because nobody
+        // wants the key without its scale.
+        musicalKey: tonal.key_key && tonal.key_scale ? `${tonal.key_key} ${tonal.key_scale}` : null,
+        // How sure the estimate is. A weak key is common in percussive or
+        // atonal music and worth being able to discount.
+        keyStrength: number(tonal.key_strength) === null ? null : round(tonal.key_strength),
+        // The archive ran its own tempo estimate, which fills the tracks Deezer
+        // never analysed. Rounded, because it is reported to nine decimal
+        // places and Deezer's own tempo carries one.
+        archiveBpm: number(rhythm.bpm) === null ? null : Math.round(rhythm.bpm * 10) / 10,
+        loudness: number(lowlevel.average_loudness),
+        dynamicComplexity: number(lowlevel.dynamic_complexity),
+        beatsCount: number(rhythm.beats_count)
+    }
+}
+
 //! Public Lookup
 // Keyed by the MusicBrainz recording ID, which the enrichment step has already
 // resolved, so this costs one request and no extra matching. Picking the wrong
 // recording upstream is not a soft failure here: a remaster and its original
 // are separate IDs, and the archive almost always holds only the original.
-async function features(mbRecordingId) {
+async function features(mbRecordingId, signal) {
     if (!mbRecordingId) return emptyFeatures()
 
-    const body = await request(`${API_BASE}/${encodeURIComponent(mbRecordingId)}/high-level`)
+    const body = await request(`${API_BASE}/${encodeURIComponent(mbRecordingId)}/high-level`, signal)
     return extractFeatures(body)
 }
 
+// A second request for the same recording. The caller only makes it once the
+// high-level answer has confirmed the archive holds this recording at all, so
+// it never fires for the majority of a list that has no analysis, and like the
+// high-level call it lands inside a gap MusicBrainz was already making the run
+// wait out.
+async function analysis(mbRecordingId, signal) {
+    if (!mbRecordingId) return emptyAnalysis()
+
+    const body = await request(`${API_BASE}/${encodeURIComponent(mbRecordingId)}/low-level`, signal)
+    return extractAnalysis(body)
+}
+
 //! Export
-module.exports = { features, extractFeatures, emptyFeatures, FEATURES }
+module.exports = {
+    features,
+    extractFeatures,
+    emptyFeatures,
+    analysis,
+    extractAnalysis,
+    emptyAnalysis,
+    FEATURES,
+    LABELS
+}

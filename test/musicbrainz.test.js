@@ -10,6 +10,7 @@ const {
     canonicalReleaseGroup,
     pickRecording,
     escapeQuery,
+    request,
     rankNamed
 } = require('../src/api/musicbrainz.js')
 const { response, stubFetch } = require('./helpers.js')
@@ -413,4 +414,190 @@ test('a failed request does not stall later ones', async (t) => {
     const second = await enrich({ isrc: 'GBUM71029604', title: 'Bohemian Rhapsody', artist: 'Queen' })
 
     assert.equal(second.mbRecordingId, 'rec-1')
+})
+
+//! Deadlines
+test('sends a deadline with every request', async (t) => {
+    const fetch = stubFetch((url) => {
+        if (url.includes('/isrc/')) return response({ recordings: [{ id: 'rec-1' }] })
+        return response(recording())
+    })
+    t.after(fetch.restore)
+
+    await enrich({ isrc: 'GBUM71029604', title: 'Bohemian Rhapsody', artist: 'Queen' })
+
+    assert.ok(fetch.calls.length > 0)
+    for (const call of fetch.calls) {
+        assert.ok(call.options.signal instanceof AbortSignal)
+    }
+})
+
+//! Fields Already In The Payload
+// Each of these arrived in the recording lookup the app was already making.
+test('asks for the credits, links and ISRCs in the same request', async (t) => {
+    const fetch = stubFetch((url) => {
+        if (url.includes('/isrc/')) return response({ recordings: [{ id: 'rec-1' }] })
+        return response(recording())
+    })
+    t.after(fetch.restore)
+
+    await enrich({ isrc: 'GBUM71029604', title: 'Bohemian Rhapsody', artist: 'Queen' })
+    const lookup = fetch.calls.find((call) => call.url.includes('/recording/rec-1'))
+
+    // one request, not four: MusicBrainz charges per call, not per byte
+    assert.match(lookup.url, /artist-credits/)
+    assert.match(lookup.url, /artist-rels/)
+    assert.match(lookup.url, /url-rels/)
+    assert.match(lookup.url, /isrcs/)
+})
+
+test('reads the note saying which recording this actually is', () => {
+    // the field that answers the app's own best-effort matching caveat outright
+    const live = extractRecording(recording({ disambiguation: 'live, Wembley 1986' }))
+
+    assert.equal(live.disambiguation, 'live, Wembley 1986')
+    assert.equal(extractRecording(recording()).disambiguation, null)
+})
+
+test('keeps the canonical length so it can be checked against Deezer', () => {
+    assert.equal(extractRecording(recording({ length: 354_000 })).mbDurationMs, 354_000)
+    assert.equal(extractRecording(recording({ length: undefined })).mbDurationMs, null)
+})
+
+test('collects the production credits by role', () => {
+    const extracted = extractRecording(
+        recording({
+            relations: [
+                { 'target-type': 'artist', type: 'producer', artist: { name: 'Roy Thomas Baker' } },
+                { 'target-type': 'artist', type: 'recording engineer', artist: { name: 'Mike Stone' } },
+                { 'target-type': 'url', type: 'wikidata', url: { resource: 'https://wikidata/Q1' } }
+            ]
+        })
+    )
+
+    assert.deepEqual(extracted.credits, [
+        { name: 'Roy Thomas Baker', role: 'producer' },
+        { name: 'Mike Stone', role: 'recording engineer' }
+    ])
+})
+
+test('keeps the links that lead somewhere, and drops the rest', () => {
+    const extracted = extractRecording(
+        recording({
+            relations: [
+                { 'target-type': 'url', type: 'wikidata', url: { resource: 'https://wikidata/Q1' } },
+                { 'target-type': 'url', type: 'discogs', url: { resource: 'https://discogs/1' } },
+                { 'target-type': 'url', type: 'streaming', url: { resource: 'https://somewhere/1' } }
+            ]
+        })
+    )
+
+    assert.equal(extracted.links.wikidata, 'https://wikidata/Q1')
+    assert.equal(extracted.links.discogs, 'https://discogs/1')
+    assert.equal(extracted.links.streaming, undefined)
+})
+
+test('reads artists as identities rather than a joined string', () => {
+    const extracted = extractRecording(
+        recording({
+            'artist-credit': [{ artist: { id: 'mbid-queen', name: 'Queen' } }]
+        })
+    )
+
+    assert.deepEqual(extracted.mbArtists, [{ name: 'Queen', id: 'mbid-queen' }])
+})
+
+test('keeps every ISRC, not only the one Deezer served', () => {
+    // a remaster and its original share a code, so the set says more than one
+    const extracted = extractRecording(recording({ isrcs: ['GBUM71029604', 'GBUM71105604'] }))
+
+    assert.deepEqual(extracted.mbIsrcs, ['GBUM71029604', 'GBUM71105604'])
+})
+
+test('builds the cover art URL from an id it already has', () => {
+    const extracted = extractRecording(
+        recording({
+            releases: [
+                {
+                    'release-group': {
+                        id: 'rg-1',
+                        'primary-type': 'Album',
+                        'first-release-date': '1975-11-21'
+                    }
+                }
+            ]
+        })
+    )
+
+    assert.equal(extracted.coverArtUrl, 'https://coverartarchive.org/release-group/rg-1/front')
+})
+
+test('returns the new fields empty rather than absent when there is no recording', () => {
+    const empty = extractRecording(null)
+
+    assert.equal(empty.disambiguation, null)
+    assert.equal(empty.mbDurationMs, null)
+    assert.equal(empty.coverArtUrl, null)
+    assert.deepEqual(empty.credits, [])
+    assert.deepEqual(empty.links, {})
+    assert.deepEqual(empty.mbIsrcs, [])
+    assert.deepEqual(empty.mbArtists, [])
+})
+
+//! Throttling
+// MusicBrainz answers a throttled request with 503 and a "server is busy" body
+// rather than a 429, so it arrives looking exactly like an outage.
+test('waits out a throttle instead of losing the whole recording', async (t) => {
+    let attempts = 0
+    const fetch = stubFetch(() => {
+        attempts += 1
+        if (attempts === 1) {
+            return response({ error: 'The MusicBrainz web server is currently busy.' }, { status: 503 })
+        }
+        return response(recording())
+    })
+    t.after(fetch.restore)
+
+    const body = await request('https://musicbrainz.org/ws/2/recording/rec-1', undefined, {
+        busyWaitMs: 0
+    })
+
+    assert.equal(attempts, 2)
+    assert.equal(body.id, 'rec-1')
+})
+
+test('gives up on a throttle that will not clear', async (t) => {
+    const fetch = stubFetch(() => response({ error: 'busy' }, { status: 503 }))
+    t.after(fetch.restore)
+
+    const body = await request('https://musicbrainz.org/ws/2/recording/rec-1', undefined, {
+        busyWaitMs: 0
+    })
+
+    assert.equal(body, null)
+    assert.equal(fetch.calls.length, 3)
+})
+
+test('does not sit out a back off for a run that was stopped', async (t) => {
+    const controller = new AbortController()
+    const fetch = stubFetch(() => {
+        controller.abort()
+        return response({ error: 'busy' }, { status: 503 })
+    })
+    t.after(fetch.restore)
+
+    const body = await request('https://musicbrainz.org/ws/2/recording/rec-1', controller.signal, {
+        busyWaitMs: 0
+    })
+
+    assert.equal(body, null)
+    assert.equal(fetch.calls.length, 1)
+})
+
+test('does not retry an ordinary failure, which will not clear by waiting', async (t) => {
+    const fetch = stubFetch(() => response({}, { status: 404 }))
+    t.after(fetch.restore)
+
+    assert.equal(await request('https://musicbrainz.org/ws/2/recording/rec-1'), null)
+    assert.equal(fetch.calls.length, 1)
 })

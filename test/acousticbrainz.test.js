@@ -4,7 +4,14 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { features, extractFeatures, emptyFeatures } = require('../src/api/acousticbrainz.js')
+const {
+    features,
+    extractFeatures,
+    emptyFeatures,
+    analysis,
+    extractAnalysis,
+    emptyAnalysis
+} = require('../src/api/acousticbrainz.js')
 const { response, stubFetch } = require('./helpers.js')
 
 //! Fixtures
@@ -124,4 +131,125 @@ test('skips the request entirely when there is no recording id', async (t) => {
 
     assert.deepEqual(await features(null), emptyFeatures())
     assert.equal(fetch.calls.length, 0)
+})
+
+//! Deadlines
+test('sends a deadline with the request', async (t) => {
+    const fetch = stubFetch(() => response(highlevel()))
+    t.after(fetch.restore)
+
+    await features('rec-1')
+
+    assert.equal(fetch.calls.length, 1)
+    assert.ok(fetch.calls[0].options.signal instanceof AbortSignal)
+})
+
+//! Classifiers Already In The Payload
+test('reads timbre and tonality, which arrive with the moods', () => {
+    const extracted = extractFeatures({
+        highlevel: {
+            timbre: { all: { bright: 0.78, dark: 0.22 }, probability: 0.78, value: 'bright' },
+            tonal_atonal: { all: { tonal: 0.94, atonal: 0.06 }, probability: 0.94, value: 'tonal' }
+        }
+    })
+
+    assert.equal(extracted.timbreBright, 0.78)
+    assert.equal(extracted.tonal, 0.94)
+})
+
+test('keeps the sign honest on timbre the same way it does on mood', () => {
+    // `probability` is confidence in whichever class won, so a dark track would
+    // read as overwhelmingly bright if that field were taken at face value.
+    const dark = extractFeatures({
+        highlevel: { timbre: { all: { bright: 0.12, dark: 0.88 }, probability: 0.88, value: 'dark' } }
+    })
+
+    assert.equal(dark.timbreBright, 0.12)
+})
+
+test('names the MIREX mood cluster rather than repeating its number', () => {
+    const extracted = extractFeatures({
+        highlevel: { moods_mirex: { value: 'Cluster5', probability: 0.4 } }
+    })
+
+    assert.equal(extracted.moodCluster, 'intense')
+})
+
+test('leaves an unrecognised cluster null rather than guessing', () => {
+    const extracted = extractFeatures({
+        highlevel: { moods_mirex: { value: 'Cluster9', probability: 0.4 } }
+    })
+
+    assert.equal(extracted.moodCluster, null)
+})
+
+test('ignores the ballroom rhythm classifier', () => {
+    // Trained on ballroom styles alone, so it has no way to answer "none of
+    // these" and files every rock song as a Quickstep. Same failure as genre.
+    const extracted = extractFeatures({
+        highlevel: { ismir04_rhythm: { value: 'VienneseWaltz', probability: 0.3 } }
+    })
+
+    assert.ok(!('rhythmStyle' in extracted))
+    assert.ok(!Object.values(extracted).includes('VienneseWaltz'))
+})
+
+test('carries the label fields in the empty shape too', () => {
+    assert.equal(emptyFeatures().moodCluster, null)
+    assert.ok('moodCluster' in emptyFeatures())
+})
+
+//! Low Level Analysis
+// The measured half of the archive, as opposed to the classified half.
+test('reads the musical key as a key and a scale together', () => {
+    const extracted = extractAnalysis({
+        tonal: { key_key: 'A', key_scale: 'minor', key_strength: 0.7412 }
+    })
+
+    assert.equal(extracted.musicalKey, 'A minor')
+    assert.equal(extracted.keyStrength, 0.741)
+})
+
+test('leaves the key null when either half is missing', () => {
+    assert.equal(extractAnalysis({ tonal: { key_key: 'A' } }).musicalKey, null)
+    assert.equal(extractAnalysis({ tonal: { key_scale: 'minor' } }).musicalKey, null)
+})
+
+test('reads the tempo, loudness and rhythm measurements', () => {
+    const extracted = extractAnalysis({
+        rhythm: { bpm: 143.2, beats_count: 812 },
+        lowlevel: { average_loudness: 0.91, dynamic_complexity: 3.2 }
+    })
+
+    assert.equal(extracted.archiveBpm, 143.2)
+    assert.equal(extracted.beatsCount, 812)
+    assert.equal(extracted.loudness, 0.91)
+    assert.equal(extracted.dynamicComplexity, 3.2)
+})
+
+test('returns the empty shape for a missing or bare body', () => {
+    assert.deepEqual(extractAnalysis(null), emptyAnalysis())
+    assert.deepEqual(extractAnalysis({}), emptyAnalysis())
+})
+
+test('asks the low-level endpoint for the recording it was given', async (t) => {
+    const fetch = stubFetch(() => response({ tonal: { key_key: 'C', key_scale: 'major' } }))
+    t.after(fetch.restore)
+
+    const extracted = await analysis('rec-1')
+
+    assert.equal(extracted.musicalKey, 'C major')
+    assert.match(fetch.calls[0].url, /rec-1\/low-level/)
+})
+
+test('skips the low-level request entirely without a recording id', async (t) => {
+    const fetch = stubFetch(() => response({}))
+    t.after(fetch.restore)
+
+    assert.deepEqual(await analysis(null), emptyAnalysis())
+    assert.equal(fetch.calls.length, 0)
+})
+
+test('rounds the archive tempo, which arrives to nine decimal places', () => {
+    assert.equal(extractAnalysis({ rhythm: { bpm: 140.279327393 } }).archiveBpm, 140.3)
 })

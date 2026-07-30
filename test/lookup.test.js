@@ -5,6 +5,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 
 const { lookupSongs, blankRow, compareDurations } = require('../src/api/lookup.js')
+const { FALLBACK } = require('../src/failure.js')
 const { response, stubFetch, deezerHit, deezerTrack, deezerAlbum } = require('./helpers.js')
 
 //! Helpers
@@ -434,4 +435,81 @@ test('a popularity outage costs the counts, not the run', async (t) => {
 
     assert.equal(row.found, true)
     assert.equal(row.listenCount, null)
+})
+
+//! Row-level Failure Messages
+// failure.js keeps the list of error kinds whose message was written for the
+// user. Everything else is a bug, and its message can carry internals, a path
+// or a fragment of a response. A row's `error` is rendered on its card and
+// written to the export, so it has to go through the same gate the run-level
+// failure does rather than carry whatever was thrown.
+// A throw from inside fetch is a dead connection, which the client maps to
+// 'network' and the run rethrows by design. The case this is about is the other
+// one: the response arrived and something downstream of it threw, which is a bug
+// in this app's own mapping rather than a condition the user can act on. A title
+// that explodes when read is the cheapest way to stage one.
+const explodingTitle = (message) => ({
+    id: 42,
+    title: {
+        toString() {
+            throw new TypeError(message)
+        }
+    }
+})
+
+test('an unexpected throw never puts its own message on the row', async (t) => {
+    const secret = "Cannot read properties of undefined (reading '/Users/kotvic/private/notes')"
+    const fetch = stubFetch((url) => {
+        if (url.includes('api.deezer.com') && url.includes('/search')) {
+            return response({ data: [explodingTitle(secret)] })
+        }
+        return response({}, { status: 404 })
+    })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian Rhapsody'])
+
+    assert.equal(row.found, false)
+    assert.equal(row.error, FALLBACK)
+    assert.ok(!row.error.includes('/Users/kotvic'))
+})
+
+test('a reportable failure still says what the client wrote', async (t) => {
+    const fetch = stubFetch((url) => {
+        // What a deadline looks like from inside fetch. The Deezer client maps
+        // it to kind 'timeout', which is on the reportable list, so the sentence
+        // it wrote is the one that has to survive the gate.
+        if (url.includes('api.deezer.com') && url.includes('/search')) {
+            const err = new Error('The operation was aborted due to timeout')
+            err.name = 'TimeoutError'
+            throw err
+        }
+        return response({}, { status: 404 })
+    })
+    t.after(fetch.restore)
+
+    const [row] = await lookupSongs(['Bohemian Rhapsody'])
+
+    assert.equal(row.found, false)
+    assert.equal(row.error, 'Deezer did not answer in time.')
+})
+
+test('one song failing does not stop the ones after it', async (t) => {
+    const fetch = stubFetch((url) => {
+        if (url.includes('api.deezer.com') && url.includes('/search')) {
+            const query = new URL(url).searchParams.get('q')
+            if (query === 'Bad Song') return response({ data: [explodingTitle('internal detail')] })
+            return response({ data: [deezerHit({ title: query })] })
+        }
+        if (url.includes('api.deezer.com/track/')) return response(deezerTrack())
+        if (url.includes('api.deezer.com')) return response(deezerAlbum())
+        return response({}, { status: 404 })
+    })
+    t.after(fetch.restore)
+
+    const rows = await lookupSongs(['Bad Song', 'Bohemian Rhapsody'])
+
+    assert.equal(rows.length, 2)
+    assert.equal(rows[0].error, FALLBACK)
+    assert.equal(rows[1].error, null)
 })

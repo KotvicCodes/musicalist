@@ -62,8 +62,14 @@ jobs:
                        exit 1
                   fi
 
+            # Every action here is pinned to a commit rather than to a tag, with
+            # the version it corresponds to in the comment. A tag is a mutable
+            # pointer: whoever can move it decides what runs in this workflow,
+            # and this workflow produces the unsigned binaries people download,
+            # which nobody can verify after the fact. Renovate and Dependabot
+            # both read the trailing comment, so updates still arrive as PRs.
             - name: Check out
-              uses: actions/checkout@v7
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   # A manual run builds whatever tag was typed in; a tag push
                   # builds itself.
@@ -88,7 +94,7 @@ jobs:
             # 36 bundled Node 22, and leaving this at 22 would have meant testing
             # on a runtime the shipped app no longer uses.
             - name: Set up Node
-              uses: actions/setup-node@v7
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
               with:
                   node-version: 24
                   cache: npm
@@ -143,7 +149,7 @@ jobs:
                   exit 1
 
             - name: Upload packages
-              uses: actions/upload-artifact@v7
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
                   name: ${{ matrix.os }}
                   path: out/make/**/*
@@ -165,7 +171,7 @@ jobs:
             contents: write
         steps:
             - name: Download every platform's packages
-              uses: actions/download-artifact@v8
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
               with:
                   path: packages
 

@@ -67,13 +67,15 @@ jobs:
                   echo "commit:     $(git rev-parse --short HEAD)"
                   node -e 'const p=require("./package.json"); console.log("version:   ", p.version); console.log("license:   ", p.license ?? "MISSING (the rpm build will fail)")'
 
-            # Electron 36 bundles Node 22, so the tests run on the same runtime
-            # that will actually execute this code in the packaged app. Node 20
-            # also reached end of life in April 2026.
+            # Electron 43 bundles Node 24, so the tests run on the same runtime
+            # that will actually execute this code in the packaged app. This
+            # tracks whichever Electron is pinned rather than standing still:
+            # 36 bundled Node 22, and leaving this at 22 would have meant testing
+            # on a runtime the shipped app no longer uses.
             - name: Set up Node
               uses: actions/setup-node@v7
               with:
-                  node-version: 22
+                  node-version: 24
                   cache: npm
 
             # The deb and rpm makers shell out to these; they are not on the

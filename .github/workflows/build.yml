@@ -38,14 +38,23 @@ jobs:
             # Checking out a tag that does not exist fails inside git with a
             # bare exit code 1, after three slow retries, and says nothing about
             # the cause. Catch it first and say what is actually wrong.
+            #
+            # TAG and REPO come in through the environment rather than through
+            # `${{ }}`, because an expression is pasted into the script as source
+            # text before bash ever sees it: a tag of `v1"; curl … | sh; #` would
+            # close the quote below and run. Through the environment the value
+            # arrives as data, and the quotes around "$TAG" are the whole defence.
             - name: Check the tag exists
               if: inputs.tag != ''
               shell: bash
+              env:
+                  TAG: ${{ inputs.tag }}
+                  REPO: ${{ github.repository }}
               run: |
                   if ! git ls-remote --tags --exit-code \
-                       "https://github.com/${{ github.repository }}" \
-                       "refs/tags/${{ inputs.tag }}" >/dev/null 2>&1; then
-                       echo "::error::Tag ${{ inputs.tag }} does not exist. Create and push it first: git tag -a ${{ inputs.tag }} -m 'Musicalist ${{ inputs.tag }}' && git push origin ${{ inputs.tag }}. Pushing a tag starts this workflow on its own, so there is no need to run it by hand."
+                       "https://github.com/$REPO" \
+                       "refs/tags/$TAG" >/dev/null 2>&1; then
+                       echo "::error::Tag $TAG does not exist. Create and push it first: git tag -a $TAG -m 'Musicalist $TAG' && git push origin $TAG. Pushing a tag starts this workflow on its own, so there is no need to run it by hand."
                        exit 1
                   fi
 
@@ -62,8 +71,10 @@ jobs:
             # take effect.
             - name: Report what is being built
               shell: bash
+              env:
+                  REF: ${{ inputs.tag || github.ref }}
               run: |
-                  echo "ref built:  ${{ inputs.tag || github.ref }}"
+                  echo "ref built:  $REF"
                   echo "commit:     $(git rev-parse --short HEAD)"
                   node -e 'const p=require("./package.json"); console.log("version:   ", p.version); console.log("license:   ", p.license ?? "MISSING (the rpm build will fail)")'
 

@@ -56,6 +56,23 @@ const LINK_TYPES = new Set(['wikidata', 'discogs', 'allmusic', 'secondhandsongs'
 // whichever reissue it happened to serve.
 const COVER_ART_BASE = 'https://coverartarchive.org/release-group'
 
+//! Identifiers
+// Every id MusicBrainz hands back is a UUID, and three of them go on to build a
+// URL: the recording id picked out of a search, the same id once the lookup
+// returns it, and the release group id the cover art URL is constructed from.
+// Only the ISRC path encoded what it interpolated, so a response that put
+// something else in one of those fields could reach a path this app never meant
+// to request, or truncate the query string with a `?` and empty the row.
+//
+// Encoding each site would stop the traversal but still let a value that is not
+// an id through. The shape is the real question, and it is asked once here
+// rather than trusted at three call sites.
+const MBID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function asMbid(value) {
+    return typeof value === 'string' && MBID.test(value) ? value : null
+}
+
 //! Helpers
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -240,9 +257,11 @@ function extractRecording(recording) {
         mbIsrcs: [],
         coverArtUrl: null
     }
-    if (!recording || !recording.id) return empty
+    const recordingId = asMbid(recording && recording.id)
+    if (!recordingId) return empty
 
     const group = canonicalReleaseGroup(recording.releases)
+    const groupId = group ? asMbid(group.id) : null
 
     // Recording level genres are the most specific, but they are often empty
     // while the release group carries good data, so fall back to it.
@@ -257,7 +276,7 @@ function extractRecording(recording) {
     }
 
     return {
-        mbRecordingId: recording.id,
+        mbRecordingId: recordingId,
         originalReleaseDate:
             recording['first-release-date'] || (group ? group['first-release-date'] : null) || null,
         releaseType: group ? group['primary-type'] || null : null,
@@ -281,7 +300,7 @@ function extractRecording(recording) {
         // remaster and the pressing it was cut from share an ISRC, so the set
         // is more informative than the single code.
         mbIsrcs: Array.isArray(recording.isrcs) ? recording.isrcs : [],
-        coverArtUrl: group && group.id ? `${COVER_ART_BASE}/${group.id}/front` : null
+        coverArtUrl: groupId ? `${COVER_ART_BASE}/${groupId}/front` : null
     }
 }
 
@@ -318,7 +337,7 @@ function pickRecording(recordings) {
     })
 
     scored.sort((a, b) => a.repackaged - b.repackaged || a.date.localeCompare(b.date))
-    return scored[0].entry.id
+    return asMbid(scored[0].entry.id)
 }
 
 // Preferred route: the ISRC from Deezer is an exact identifier, so it needs no
@@ -364,6 +383,7 @@ module.exports = {
     extractRecording,
     canonicalReleaseGroup,
     pickRecording,
+    asMbid,
     escapeQuery,
     rankNamed,
     request,

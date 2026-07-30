@@ -15,6 +15,21 @@ const {
 } = require('../src/api/musicbrainz.js')
 const { response, stubFetch } = require('./helpers.js')
 
+//! Identifiers
+// Every MusicBrainz id is a UUID and the client now refuses anything that is
+// not one, so a fixture can no longer use a descriptive string as an id. This
+// keeps the descriptions readable: each name gets its own stable UUID, and the
+// tests below say `mbid('original')` where they used to say `'original'`.
+const minted = new Map()
+
+function mbid(name) {
+    if (!minted.has(name)) {
+        const nth = String(minted.size + 1).padStart(12, '0')
+        minted.set(name, `00000000-0000-4000-8000-${nth}`)
+    }
+    return minted.get(name)
+}
+
 //! Fixtures
 const releaseGroup = (overrides = {}) => ({
     title: 'A Night at the Opera',
@@ -27,7 +42,7 @@ const releaseGroup = (overrides = {}) => ({
 })
 
 const recording = (overrides = {}) => ({
-    id: 'rec-1',
+    id: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19',
     title: 'Bohemian Rhapsody',
     'first-release-date': '1975-11-21',
     genres: [
@@ -144,59 +159,59 @@ test('prefers an original recording over equally scoring compilations', () => {
     // of recordings all scoring 100, most of them compilation appearances.
     const id = pickRecording([
         {
-            id: 'comp-1',
+            id: mbid('comp-1'),
             score: 100,
             'first-release-date': '1994',
             releases: [{ 'release-group': releaseGroup({ 'secondary-types': ['Compilation'] }) }]
         },
         {
-            id: 'original',
+            id: mbid('original'),
             score: 100,
             'first-release-date': '1991-09-10',
             releases: [{ 'release-group': releaseGroup({ 'secondary-types': [] }) }]
         },
         {
-            id: 'live-1',
+            id: mbid('live-1'),
             score: 100,
             'first-release-date': '1992',
             releases: [{ 'release-group': releaseGroup({ 'secondary-types': ['Live'] }) }]
         }
     ])
 
-    assert.equal(id, 'original')
+    assert.equal(id, mbid('original'))
 })
 
 test('never drops below the top score', () => {
     const id = pickRecording([
-        { id: 'best', score: 100, releases: [] },
+        { id: mbid('best'), score: 100, releases: [] },
         {
-            id: 'worse-but-original',
+            id: mbid('worse-but-original'),
             score: 40,
             'first-release-date': '1960',
             releases: [{ 'release-group': releaseGroup() }]
         }
     ])
 
-    assert.equal(id, 'best')
+    assert.equal(id, mbid('best'))
 })
 
 test('picks the earliest among equally original candidates', () => {
     const id = pickRecording([
         {
-            id: 'later',
+            id: mbid('later'),
             score: 100,
             'first-release-date': '1999',
             releases: [{ 'release-group': releaseGroup() }]
         },
         {
-            id: 'earlier',
+            id: mbid('earlier'),
             score: 100,
             'first-release-date': '1975',
             releases: [{ 'release-group': releaseGroup() }]
         }
     ])
 
-    assert.equal(id, 'earlier')
+    assert.equal(id, mbid('earlier'))
 })
 
 test('returns null for an empty candidate list', () => {
@@ -208,7 +223,7 @@ test('returns null for an empty candidate list', () => {
 test('extracts genres, original date and release typing', () => {
     const result = extractRecording(recording())
 
-    assert.equal(result.mbRecordingId, 'rec-1')
+    assert.equal(result.mbRecordingId, 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19')
     assert.equal(result.originalReleaseDate, '1975-11-21')
     assert.equal(result.releaseType, 'Album')
     assert.deepEqual(result.wikiGenres, ['rock', 'hard rock', 'pop'])
@@ -281,14 +296,15 @@ test('escapes Lucene syntax in song titles', () => {
 //! Lookup
 test('resolves through the ISRC and then loads the recording', async (t) => {
     const fetch = stubFetch((url) => {
-        if (url.includes('/isrc/')) return response({ recordings: [{ id: 'rec-1' }] })
+        if (url.includes('/isrc/'))
+            return response({ recordings: [{ id: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19' }] })
         return response(recording())
     })
     t.after(fetch.restore)
 
     const result = await enrich({ isrc: 'GBUM71029604', title: 'Bohemian Rhapsody', artist: 'Queen' })
 
-    assert.equal(result.mbRecordingId, 'rec-1')
+    assert.equal(result.mbRecordingId, 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19')
     assert.match(fetch.calls[0].url, /\/isrc\/GBUM71029604/)
     assert.match(fetch.calls[1].url, /inc=genres\+tags\+releases\+release-groups/)
 })
@@ -301,26 +317,26 @@ test('prefers the original when one ISRC covers a remaster too', async (t) => {
             return response({
                 recordings: [
                     {
-                        id: 'remaster',
+                        id: mbid('remaster'),
                         title: 'Smells Like Teen Spirit (remastered 2021)',
                         'first-release-date': '2021-11-10'
                     },
                     {
-                        id: 'original',
+                        id: mbid('original'),
                         title: 'Smells Like Teen Spirit',
                         'first-release-date': '1991-09-10'
                     }
                 ]
             })
-        return response(recording({ id: 'original', 'first-release-date': '1991-09-10' }))
+        return response(recording({ id: mbid('original'), 'first-release-date': '1991-09-10' }))
     })
     t.after(fetch.restore)
 
     const result = await enrich({ isrc: 'USGF19942501', title: 'Smells Like Teen Spirit' })
 
-    assert.equal(result.mbRecordingId, 'original')
+    assert.equal(result.mbRecordingId, mbid('original'))
     assert.equal(result.originalReleaseDate, '1991-09-10')
-    assert.match(fetch.calls[1].url, /\/recording\/original\?/)
+    assert.match(fetch.calls[1].url, new RegExp(`/recording/${mbid('original')}\\?`))
 })
 
 // The ISRC payload has no scores and no releases, so the ranking has to survive
@@ -328,33 +344,89 @@ test('prefers the original when one ISRC covers a remaster too', async (t) => {
 test('ranks ISRC hits that carry no score or releases', () => {
     assert.equal(
         pickRecording([
-            { id: 'late', 'first-release-date': '2021-11-10' },
-            { id: 'early', 'first-release-date': '1991-09-10' }
+            { id: mbid('late'), 'first-release-date': '2021-11-10' },
+            { id: mbid('early'), 'first-release-date': '1991-09-10' }
         ]),
-        'early'
+        mbid('early')
     )
 })
 
 // An undated entry must not win by default, but it is still better than nothing.
 test('keeps an undated ISRC hit behind a dated one', () => {
     assert.equal(
-        pickRecording([{ id: 'undated' }, { id: 'dated', 'first-release-date': '1991' }]),
-        'dated'
+        pickRecording([{ id: mbid('undated') }, { id: mbid('dated'), 'first-release-date': '1991' }]),
+        mbid('dated')
     )
-    assert.equal(pickRecording([{ id: 'only' }]), 'only')
+    assert.equal(pickRecording([{ id: mbid('only') }]), mbid('only'))
+})
+
+//! Identifier Validation
+// A recording id is spliced into a URL path and used as the key for two other
+// services, so a response that puts something other than a UUID there must not
+// be followed. The host is fixed, so the ceiling on this is reaching a path on
+// musicbrainz.org the app never meant to request, or truncating the query with
+// a `?` so `inc=` is dropped and the row comes back empty either way.
+test('refuses a recording id that is not a UUID', () => {
+    assert.equal(pickRecording([{ id: '../../../etc/passwd' }]), null)
+    assert.equal(pickRecording([{ id: 'rec-1?fmt=json&inc=' }]), null)
+    assert.equal(pickRecording([{ id: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19/../other' }]), null)
+    assert.equal(pickRecording([{ id: 42 }]), null)
+    assert.equal(pickRecording([{ id: null }]), null)
+})
+
+test('never requests a recording whose id failed the check', async (t) => {
+    const fetch = stubFetch((url) => {
+        if (url.includes('/isrc/')) return response({ recordings: [{ id: '../../release/1' }] })
+        if (url.includes('query=')) return response({ recordings: [] })
+        return response(null)
+    })
+    t.after(fetch.restore)
+
+    const result = await enrich({ isrc: 'GBUM71029604', title: 'Bohemian Rhapsody' })
+
+    assert.equal(result.mbRecordingId, null)
+    assert.ok(!fetch.calls.some((call) => call.url.includes('/recording/..')))
+})
+
+test('drops a recording lookup whose own id is not a UUID', () => {
+    // The id checked above is the one chosen from a search. This is the second
+    // one: what the recording lookup itself reports, which becomes the key
+    // AcousticBrainz and ListenBrainz are queried by.
+    const result = extractRecording(recording({ id: 'not-a-uuid' }))
+
+    assert.equal(result.mbRecordingId, null)
+    assert.deepEqual(result.wikiGenres, [])
+})
+
+test('leaves the cover art URL off when the release group id is not a UUID', () => {
+    const result = extractRecording(
+        recording({
+            releases: [{ 'release-group': releaseGroup({ id: 'evil/../../x' }) }]
+        })
+    )
+
+    assert.equal(result.coverArtUrl, null)
+    // The rest of the row still stands: a bad group id costs the artwork, not
+    // the genres that arrived in the same response.
+    assert.deepEqual(result.wikiGenres, ['rock', 'hard rock', 'pop'])
+})
+
+test('accepts a UUID in either case', () => {
+    const upper = 'F6D2C1A4-7B3E-4C58-9A01-2D5E8B7C4A19'
+    assert.equal(pickRecording([{ id: upper }]), upper)
 })
 
 test('falls back to a text search when the ISRC is unknown', async (t) => {
     const fetch = stubFetch((url) => {
         if (url.includes('/isrc/')) return response({ recordings: [] })
-        if (url.includes('query=')) return response({ recordings: [{ id: 'rec-2' }] })
-        return response(recording({ id: 'rec-2' }))
+        if (url.includes('query=')) return response({ recordings: [{ id: mbid('rec-2') }] })
+        return response(recording({ id: mbid('rec-2') }))
     })
     t.after(fetch.restore)
 
     const result = await enrich({ isrc: 'NOPE', title: 'Bohemian Rhapsody', artist: 'Queen' })
 
-    assert.equal(result.mbRecordingId, 'rec-2')
+    assert.equal(result.mbRecordingId, mbid('rec-2'))
     assert.match(fetch.calls[1].url, /recording%3A/)
     assert.match(fetch.calls[1].url, /artist%3A/)
 })
@@ -374,7 +446,8 @@ test('identifies itself to MusicBrainz with the current version', async (t) => {
 
 test('spaces requests at least a second apart', async (t) => {
     const fetch = stubFetch((url) => {
-        if (url.includes('/isrc/')) return response({ recordings: [{ id: 'rec-1' }] })
+        if (url.includes('/isrc/'))
+            return response({ recordings: [{ id: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19' }] })
         return response(recording())
     })
     t.after(fetch.restore)
@@ -405,7 +478,8 @@ test('a failed request does not stall later ones', async (t) => {
     const fetch = stubFetch((url) => {
         call += 1
         if (call === 1) throw new Error('ECONNRESET')
-        if (url.includes('/isrc/')) return response({ recordings: [{ id: 'rec-1' }] })
+        if (url.includes('/isrc/'))
+            return response({ recordings: [{ id: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19' }] })
         return response(recording())
     })
     t.after(fetch.restore)
@@ -413,13 +487,14 @@ test('a failed request does not stall later ones', async (t) => {
     await enrich({ isrc: 'BAD', title: 'One', artist: 'A' })
     const second = await enrich({ isrc: 'GBUM71029604', title: 'Bohemian Rhapsody', artist: 'Queen' })
 
-    assert.equal(second.mbRecordingId, 'rec-1')
+    assert.equal(second.mbRecordingId, 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19')
 })
 
 //! Deadlines
 test('sends a deadline with every request', async (t) => {
     const fetch = stubFetch((url) => {
-        if (url.includes('/isrc/')) return response({ recordings: [{ id: 'rec-1' }] })
+        if (url.includes('/isrc/'))
+            return response({ recordings: [{ id: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19' }] })
         return response(recording())
     })
     t.after(fetch.restore)
@@ -436,13 +511,16 @@ test('sends a deadline with every request', async (t) => {
 // Each of these arrived in the recording lookup the app was already making.
 test('asks for the credits, links and ISRCs in the same request', async (t) => {
     const fetch = stubFetch((url) => {
-        if (url.includes('/isrc/')) return response({ recordings: [{ id: 'rec-1' }] })
+        if (url.includes('/isrc/'))
+            return response({ recordings: [{ id: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19' }] })
         return response(recording())
     })
     t.after(fetch.restore)
 
     await enrich({ isrc: 'GBUM71029604', title: 'Bohemian Rhapsody', artist: 'Queen' })
-    const lookup = fetch.calls.find((call) => call.url.includes('/recording/rec-1'))
+    const lookup = fetch.calls.find((call) =>
+        call.url.includes('/recording/f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19')
+    )
 
     // one request, not four: MusicBrainz charges per call, not per byte
     assert.match(lookup.url, /artist-credits/)
@@ -520,7 +598,7 @@ test('builds the cover art URL from an id it already has', () => {
             releases: [
                 {
                     'release-group': {
-                        id: 'rg-1',
+                        id: '0c4e8b31-96af-4f2d-b5c7-1e93a6d20f84',
                         'primary-type': 'Album',
                         'first-release-date': '1975-11-21'
                     }
@@ -529,7 +607,10 @@ test('builds the cover art URL from an id it already has', () => {
         })
     )
 
-    assert.equal(extracted.coverArtUrl, 'https://coverartarchive.org/release-group/rg-1/front')
+    assert.equal(
+        extracted.coverArtUrl,
+        'https://coverartarchive.org/release-group/0c4e8b31-96af-4f2d-b5c7-1e93a6d20f84/front'
+    )
 })
 
 test('returns the new fields empty rather than absent when there is no recording', () => {
@@ -558,21 +639,29 @@ test('waits out a throttle instead of losing the whole recording', async (t) => 
     })
     t.after(fetch.restore)
 
-    const body = await request('https://musicbrainz.org/ws/2/recording/rec-1', undefined, {
-        busyWaitMs: 0
-    })
+    const body = await request(
+        'https://musicbrainz.org/ws/2/recording/f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19',
+        undefined,
+        {
+            busyWaitMs: 0
+        }
+    )
 
     assert.equal(attempts, 2)
-    assert.equal(body.id, 'rec-1')
+    assert.equal(body.id, 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19')
 })
 
 test('gives up on a throttle that will not clear', async (t) => {
     const fetch = stubFetch(() => response({ error: 'busy' }, { status: 503 }))
     t.after(fetch.restore)
 
-    const body = await request('https://musicbrainz.org/ws/2/recording/rec-1', undefined, {
-        busyWaitMs: 0
-    })
+    const body = await request(
+        'https://musicbrainz.org/ws/2/recording/f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19',
+        undefined,
+        {
+            busyWaitMs: 0
+        }
+    )
 
     assert.equal(body, null)
     assert.equal(fetch.calls.length, 3)
@@ -586,9 +675,13 @@ test('does not sit out a back off for a run that was stopped', async (t) => {
     })
     t.after(fetch.restore)
 
-    const body = await request('https://musicbrainz.org/ws/2/recording/rec-1', controller.signal, {
-        busyWaitMs: 0
-    })
+    const body = await request(
+        'https://musicbrainz.org/ws/2/recording/f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19',
+        controller.signal,
+        {
+            busyWaitMs: 0
+        }
+    )
 
     assert.equal(body, null)
     assert.equal(fetch.calls.length, 1)
@@ -598,6 +691,9 @@ test('does not retry an ordinary failure, which will not clear by waiting', asyn
     const fetch = stubFetch(() => response({}, { status: 404 }))
     t.after(fetch.restore)
 
-    assert.equal(await request('https://musicbrainz.org/ws/2/recording/rec-1'), null)
+    assert.equal(
+        await request('https://musicbrainz.org/ws/2/recording/f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19'),
+        null
+    )
     assert.equal(fetch.calls.length, 1)
 })

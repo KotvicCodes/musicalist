@@ -15,7 +15,11 @@ function stubEverything({ tracks = {}, mbDown = false, audio = null, listens = 0
         if (url.includes('api.listenbrainz.org')) {
             if (!listens) return response([])
             return response([
-                { recording_mbid: 'rec-1', total_listen_count: listens, total_user_count: 12 }
+                {
+                    recording_mbid: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19',
+                    total_listen_count: listens,
+                    total_user_count: 12
+                }
             ])
         }
 
@@ -57,10 +61,11 @@ function stubEverything({ tracks = {}, mbDown = false, audio = null, listens = 0
 
         if (mbDown) throw new Error('ECONNRESET')
 
-        if (url.includes('/isrc/')) return response({ recordings: [{ id: 'rec-1' }] })
+        if (url.includes('/isrc/'))
+            return response({ recordings: [{ id: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19' }] })
 
         return response({
-            id: 'rec-1',
+            id: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19',
             'first-release-date': '1975-11-21',
             genres: [{ name: 'rock', count: 13 }],
             tags: [],
@@ -201,7 +206,11 @@ test('merges AcousticBrainz mood into the row', async (t) => {
 
     assert.equal(row.danceability, 0.82)
     assert.ok(
-        fetch.calls.some((call) => call.url.includes('acousticbrainz.org/api/v1/rec-1/high-level'))
+        fetch.calls.some((call) =>
+            call.url.includes(
+                'acousticbrainz.org/api/v1/f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19/high-level'
+            )
+        )
     )
 })
 
@@ -343,7 +352,9 @@ test('asks the archive for the measured analysis once it knows there is one', as
     const [row] = await lookupSongs(['Bohemian'])
 
     assert.equal(row.musicalKey, 'B flat')
-    assert.ok(fetch.calls.some((call) => call.url.includes('/rec-1/low-level')))
+    assert.ok(
+        fetch.calls.some((call) => call.url.includes('/f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19/low-level'))
+    )
 })
 
 test('does not pay for a low-level call the archive cannot answer', async (t) => {
@@ -408,8 +419,14 @@ test('a popularity outage costs the counts, not the run', async (t) => {
             if (url.includes('/track/')) return response(deezerTrack())
             return response(deezerAlbum())
         }
-        if (url.includes('/isrc/')) return response({ recordings: [{ id: 'rec-1' }] })
-        return response({ id: 'rec-1', genres: [], tags: [], releases: [] })
+        if (url.includes('/isrc/'))
+            return response({ recordings: [{ id: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19' }] })
+        return response({
+            id: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19',
+            genres: [],
+            tags: [],
+            releases: []
+        })
     })
     t.after(fetch.restore)
 

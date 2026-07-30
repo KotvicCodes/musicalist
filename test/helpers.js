@@ -168,7 +168,7 @@ function songRow(overrides = {}) {
             { name: 'hard rock', count: 9 }
         ],
         tags: ['album rock'],
-        mbRecordingId: 'rec-1',
+        mbRecordingId: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19',
         ...overrides
     }
 }

@@ -12,6 +12,11 @@
 // is a bug rather than a condition the user can do something about, and its
 // message could carry internals, paths or response fragments that have no
 // business in the UI.
+//
+// Two callers, not one: the run-lookup handler describes the failure that ended
+// a whole run, and lookup.js describes the one that cost a single song. A row's
+// `error` is rendered on its card and written to the export, so it needs the
+// same gate rather than a second policy that happens to agree today.
 const REPORTABLE = new Set(['network', 'rate-limit', 'timeout'])
 
 const FALLBACK = 'Something went wrong during the lookup.'

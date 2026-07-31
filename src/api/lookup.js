@@ -6,6 +6,7 @@ const { createClient } = require('./deezer.js')
 const musicbrainz = require('./musicbrainz.js')
 const acousticbrainz = require('./acousticbrainz.js')
 const listenbrainz = require('./listenbrainz.js')
+const { describeFailure } = require('../failure.js')
 
 //! Duration Cross-check
 // A studio original and a live take of the same song rarely agree within a few
@@ -183,7 +184,13 @@ async function lookupSongs(songs, { onProgress, signal } = {}) {
             // A dead connection will fail every remaining song identically,
             // so stop rather than emit a wall of errors.
             if (err.kind === 'network') throw err
-            row = { ...blankRow(query), error: err.message }
+
+            // Through the same gate the run-level failure goes through. A row's
+            // `error` is rendered on its card and written to the export, so an
+            // unexpected throw must not put its raw message in either: that is
+            // exactly what describeFailure exists to stop, and this path used to
+            // go around it.
+            row = { ...blankRow(query), error: describeFailure(err).message }
         }
 
         rows.push(row)

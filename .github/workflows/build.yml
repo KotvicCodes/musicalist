@@ -14,9 +14,13 @@ on:
                 required: false
                 type: string
 
-# Needed so the release job can attach the finished packages.
+# Read by default, so the three build jobs hold a token that can do nothing but
+# check the repository out. They run `npm ci` and `npm run make`, which execute
+# a few hundred packages' worth of install scripts and packaging code, and none
+# of that has any business holding a credential that can publish a release.
+# Write is granted on the one job that attaches the packages, below.
 permissions:
-    contents: write
+    contents: read
 
 jobs:
     build:
@@ -38,19 +42,34 @@ jobs:
             # Checking out a tag that does not exist fails inside git with a
             # bare exit code 1, after three slow retries, and says nothing about
             # the cause. Catch it first and say what is actually wrong.
+            #
+            # TAG and REPO come in through the environment rather than through
+            # `${{ }}`, because an expression is pasted into the script as source
+            # text before bash ever sees it: a tag of `v1"; curl … | sh; #` would
+            # close the quote below and run. Through the environment the value
+            # arrives as data, and the quotes around "$TAG" are the whole defence.
             - name: Check the tag exists
               if: inputs.tag != ''
               shell: bash
+              env:
+                  TAG: ${{ inputs.tag }}
+                  REPO: ${{ github.repository }}
               run: |
                   if ! git ls-remote --tags --exit-code \
-                       "https://github.com/${{ github.repository }}" \
-                       "refs/tags/${{ inputs.tag }}" >/dev/null 2>&1; then
-                       echo "::error::Tag ${{ inputs.tag }} does not exist. Create and push it first: git tag -a ${{ inputs.tag }} -m 'Musicalist ${{ inputs.tag }}' && git push origin ${{ inputs.tag }}. Pushing a tag starts this workflow on its own, so there is no need to run it by hand."
+                       "https://github.com/$REPO" \
+                       "refs/tags/$TAG" >/dev/null 2>&1; then
+                       echo "::error::Tag $TAG does not exist. Create and push it first: git tag -a $TAG -m 'Musicalist $TAG' && git push origin $TAG. Pushing a tag starts this workflow on its own, so there is no need to run it by hand."
                        exit 1
                   fi
 
+            # Every action here is pinned to a commit rather than to a tag, with
+            # the version it corresponds to in the comment. A tag is a mutable
+            # pointer: whoever can move it decides what runs in this workflow,
+            # and this workflow produces the unsigned binaries people download,
+            # which nobody can verify after the fact. Renovate and Dependabot
+            # both read the trailing comment, so updates still arrive as PRs.
             - name: Check out
-              uses: actions/checkout@v7
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   # A manual run builds whatever tag was typed in; a tag push
                   # builds itself.
@@ -62,18 +81,22 @@ jobs:
             # take effect.
             - name: Report what is being built
               shell: bash
+              env:
+                  REF: ${{ inputs.tag || github.ref }}
               run: |
-                  echo "ref built:  ${{ inputs.tag || github.ref }}"
+                  echo "ref built:  $REF"
                   echo "commit:     $(git rev-parse --short HEAD)"
                   node -e 'const p=require("./package.json"); console.log("version:   ", p.version); console.log("license:   ", p.license ?? "MISSING (the rpm build will fail)")'
 
-            # Electron 36 bundles Node 22, so the tests run on the same runtime
-            # that will actually execute this code in the packaged app. Node 20
-            # also reached end of life in April 2026.
+            # Electron 43 bundles Node 24, so the tests run on the same runtime
+            # that will actually execute this code in the packaged app. This
+            # tracks whichever Electron is pinned rather than standing still:
+            # 36 bundled Node 22, and leaving this at 22 would have meant testing
+            # on a runtime the shipped app no longer uses.
             - name: Set up Node
-              uses: actions/setup-node@v7
+              uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
               with:
-                  node-version: 22
+                  node-version: 24
                   cache: npm
 
             # The deb and rpm makers shell out to these; they are not on the
@@ -126,7 +149,7 @@ jobs:
                   exit 1
 
             - name: Upload packages
-              uses: actions/upload-artifact@v7
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
                   name: ${{ matrix.os }}
                   path: out/make/**/*
@@ -141,9 +164,14 @@ jobs:
         # is also what makes it safe to use a manual run to test this workflow.
         if: startsWith(github.ref, 'refs/tags/') || inputs.tag != ''
         runs-on: ubuntu-latest
+        # The only job that needs to write anything. It checks nothing out and
+        # runs no dependency code: it downloads the artifacts the build jobs
+        # produced and hands them to gh.
+        permissions:
+            contents: write
         steps:
             - name: Download every platform's packages
-              uses: actions/download-artifact@v8
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
               with:
                   path: packages
 

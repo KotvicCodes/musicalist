@@ -101,9 +101,9 @@ test('looks the recording up by its MusicBrainz id', async (t) => {
     const fetch = stubFetch(() => response(highlevel()))
     t.after(fetch.restore)
 
-    const result = await features('rec-1')
+    const result = await features('f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19')
 
-    assert.match(fetch.calls[0].url, /\/rec-1\/high-level$/)
+    assert.match(fetch.calls[0].url, /\/f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19\/high-level$/)
     assert.equal(result.moodHappy, 0.121)
 })
 
@@ -122,7 +122,7 @@ test('survives a dead connection without throwing', async (t) => {
     })
     t.after(fetch.restore)
 
-    assert.deepEqual(await features('rec-1'), emptyFeatures())
+    assert.deepEqual(await features('f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19'), emptyFeatures())
 })
 
 test('skips the request entirely when there is no recording id', async (t) => {
@@ -138,7 +138,7 @@ test('sends a deadline with the request', async (t) => {
     const fetch = stubFetch(() => response(highlevel()))
     t.after(fetch.restore)
 
-    await features('rec-1')
+    await features('f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19')
 
     assert.equal(fetch.calls.length, 1)
     assert.ok(fetch.calls[0].options.signal instanceof AbortSignal)
@@ -236,10 +236,10 @@ test('asks the low-level endpoint for the recording it was given', async (t) => 
     const fetch = stubFetch(() => response({ tonal: { key_key: 'C', key_scale: 'major' } }))
     t.after(fetch.restore)
 
-    const extracted = await analysis('rec-1')
+    const extracted = await analysis('f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19')
 
     assert.equal(extracted.musicalKey, 'C major')
-    assert.match(fetch.calls[0].url, /rec-1\/low-level/)
+    assert.match(fetch.calls[0].url, /f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19\/low-level/)
 })
 
 test('skips the low-level request entirely without a recording id', async (t) => {

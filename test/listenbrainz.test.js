@@ -10,11 +10,18 @@ const { response, stubFetch } = require('./helpers.js')
 //! Extraction
 test('keys the counts by recording id', () => {
     const counts = extractCounts([
-        { recording_mbid: 'rec-1', total_listen_count: 91_204, total_user_count: 3812 },
+        {
+            recording_mbid: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19',
+            total_listen_count: 91_204,
+            total_user_count: 3812
+        },
         { recording_mbid: 'rec-2', total_listen_count: 12, total_user_count: 4 }
     ])
 
-    assert.deepEqual(counts.get('rec-1'), { listenCount: 91_204, listenerCount: 3812 })
+    assert.deepEqual(counts.get('f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19'), {
+        listenCount: 91_204,
+        listenerCount: 3812
+    })
     assert.equal(counts.get('rec-2').listenCount, 12)
 })
 
@@ -22,10 +29,14 @@ test('keeps a genuine zero, which is not the same as no answer', () => {
     // nobody has submitted a listen is a real result; absent from the response
     // entirely is the gap
     const counts = extractCounts([
-        { recording_mbid: 'rec-1', total_listen_count: 0, total_user_count: 0 }
+        {
+            recording_mbid: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19',
+            total_listen_count: 0,
+            total_user_count: 0
+        }
     ])
 
-    assert.equal(counts.get('rec-1').listenCount, 0)
+    assert.equal(counts.get('f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19').listenCount, 0)
     assert.equal(counts.get('rec-3'), undefined)
 })
 
@@ -38,17 +49,23 @@ test('ignores malformed entries rather than throwing', () => {
 //! Batching
 test('asks for the whole list in one request', async (t) => {
     const fetch = stubFetch(() =>
-        response([{ recording_mbid: 'rec-1', total_listen_count: 5, total_user_count: 2 }])
+        response([
+            {
+                recording_mbid: 'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19',
+                total_listen_count: 5,
+                total_user_count: 2
+            }
+        ])
     )
     t.after(fetch.restore)
 
-    await popularity(['rec-1', 'rec-2', 'rec-3'])
+    await popularity(['f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19', 'rec-2', 'rec-3'])
 
     // the point of this endpoint: one call for the run, not one per song
     assert.equal(fetch.calls.length, 1)
 
     const sent = JSON.parse(fetch.calls[0].options.body)
-    assert.deepEqual(sent.recording_mbids, ['rec-1', 'rec-2', 'rec-3'])
+    assert.deepEqual(sent.recording_mbids, ['f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19', 'rec-2', 'rec-3'])
     assert.equal(fetch.calls[0].options.method, 'POST')
 })
 
@@ -56,10 +73,16 @@ test('deduplicates ids and drops the empty ones', async (t) => {
     const fetch = stubFetch(() => response([]))
     t.after(fetch.restore)
 
-    await popularity(['rec-1', 'rec-1', null, undefined, 'rec-2'])
+    await popularity([
+        'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19',
+        'f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19',
+        null,
+        undefined,
+        'rec-2'
+    ])
     const sent = JSON.parse(fetch.calls[0].options.body)
 
-    assert.deepEqual(sent.recording_mbids, ['rec-1', 'rec-2'])
+    assert.deepEqual(sent.recording_mbids, ['f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19', 'rec-2'])
 })
 
 test('splits a list longer than one batch', async (t) => {
@@ -91,21 +114,21 @@ test('an outage costs the counts, not the songs', async (t) => {
     })
     t.after(fetch.restore)
 
-    assert.equal((await popularity(['rec-1'])).size, 0)
+    assert.equal((await popularity(['f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19'])).size, 0)
 })
 
 test('an HTTP failure costs the counts, not the songs', async (t) => {
     const fetch = stubFetch(() => response({}, { status: 503 }))
     t.after(fetch.restore)
 
-    assert.equal((await popularity(['rec-1'])).size, 0)
+    assert.equal((await popularity(['f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19'])).size, 0)
 })
 
 test('sends a deadline with the request', async (t) => {
     const fetch = stubFetch(() => response([]))
     t.after(fetch.restore)
 
-    await popularity(['rec-1'])
+    await popularity(['f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19'])
 
     assert.ok(fetch.calls[0].options.signal instanceof AbortSignal)
 })

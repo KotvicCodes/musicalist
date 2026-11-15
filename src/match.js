@@ -14,18 +14,30 @@ const DIACRITICS = /[̀-ͯ]/g
 // Edition markers live in brackets: (Remastered 2011), [Live], (feat. X). They
 // say which pressing this is, not which song, and MusicBrainz is what settles
 // the pressing question. Dropping them makes the comparison about identity.
-const BRACKETED = /[([{][^)\]}]*[)\]}]/g
+//
+// Plenty of real titles open with or consist of brackets though: "(Don't Fear)
+// The Reaper", "(Sittin' On) The Dock of the Bay", "(Intro)". Stripping every
+// bracket unconditionally threw away half the title or left nothing at all, so
+// only brackets that actually name an edition, a feature or a year are dropped,
+// and never when doing so would empty the string.
+const BRACKETED = /[([{][^()[\]{}]*[)\]}]/g
+const EDITION_MARKER =
+    /\b(remaster(?:ed)?|live|feat(?:uring)?|ft|with|version|edit(?:ion)?|re?mix|mono|stereo|deluxe|expanded|anniversary|bonus|explicit|clean|acoustic|demo|instrumental|radio|soundtrack|ost|single|album|session|take|re-?recorded|(?:19|20)\d{2})\b/
 
 const NON_WORD = /[^\p{L}\p{N}]+/gu
 
 function normalise(value) {
-    return String(value ?? '')
+    const folded = String(value ?? '')
         .normalize('NFD')
         .replace(DIACRITICS, '')
         .toLowerCase()
-        .replace(BRACKETED, ' ')
+
+    const stripped = folded
+        .replace(BRACKETED, (match) => (EDITION_MARKER.test(match) ? ' ' : match))
         .replace(NON_WORD, ' ')
         .trim()
+
+    return stripped || folded.replace(NON_WORD, ' ').trim()
 }
 
 function tokenise(value) {

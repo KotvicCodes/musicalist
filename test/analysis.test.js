@@ -4,7 +4,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { summarise, formatDuration, effectiveYear, MOOD_FIELDS } = require('../src/analysis.js')
+const { summarise, formatDuration, effectiveYear, yearOf, MOOD_FIELDS } = require('../src/analysis.js')
 const { FEATURES } = require('../src/api/acousticbrainz.js')
 const { blankRow } = require('../src/api/lookup.js')
 const { songRow } = require('./helpers.js')
@@ -88,6 +88,27 @@ test('does not count a Deezer date that predates the original', () => {
     const summary = summarise([
         songRow({ originalReleaseDate: '2011-01-01', releaseDate: ['1975-01-01'] })
     ])
+    assert.equal(summary.reissueDrift.count, 0)
+})
+
+test('rejects malformed or placeholder release years', () => {
+    assert.equal(yearOf('0000-00-00'), null)
+    assert.equal(yearOf('20'), null)
+    assert.equal(yearOf('-100'), null)
+    assert.equal(yearOf('0999-01-01'), null)
+    assert.equal(
+        effectiveYear(songRow({ originalReleaseDate: '0000-00-00', releaseDate: ['1984-01-01'] })),
+        1984
+    )
+    assert.equal(effectiveYear(songRow({ originalReleaseDate: '20', releaseDate: ['-100'] })), null)
+
+    const summary = summarise([
+        songRow({ originalReleaseDate: '0000-00-00', releaseDate: [] }),
+        songRow({ originalReleaseDate: '20', releaseDate: ['2011-01-01'] }),
+        songRow({ originalReleaseDate: '-100', releaseDate: ['2011-01-01'] })
+    ])
+
+    assert.deepEqual(summary.decades, [{ decade: 2010, count: 2 }])
     assert.equal(summary.reissueDrift.count, 0)
 })
 

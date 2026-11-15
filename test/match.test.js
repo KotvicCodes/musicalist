@@ -22,9 +22,30 @@ test('drops the bracketed edition markers', () => {
     assert.equal(normalise('Creep [Live]'), 'creep')
 })
 
+test('keeps parenthetical words that belong to the title itself', () => {
+    assert.equal(normalise("(Don't Fear) The Reaper"), 'don t fear the reaper')
+    assert.equal(normalise("(Sittin' On) The Dock of the Bay"), 'sittin on the dock of the bay')
+    assert.equal(normalise("(I Can't Get No) Satisfaction"), 'i can t get no satisfaction')
+    assert.equal(normalise("(Don't Fear) The Reaper (Remastered 2001)"), 'don t fear the reaper')
+})
+
+test('never strips a title down to nothing when the whole name is in brackets', () => {
+    assert.equal(normalise('(Intro)'), 'intro')
+    assert.equal(normalise('[Untitled]'), 'untitled')
+    assert.equal(normalise('(Live)'), 'live')
+    assert.equal(normalise('[Instrumental]'), 'instrumental')
+})
+
 //! Scoring
 test('scores an exact title and artist at the top', () => {
     assert.equal(scoreHit('Bohemian Rhapsody Queen', hit('Bohemian Rhapsody', 'Queen')), 1)
+})
+
+test('scores a parenthetical title at the top even when the query omits the brackets', () => {
+    assert.equal(
+        scoreHit("Don't Fear The Reaper", hit("(Don't Fear) The Reaper", 'Blue Öyster Cult')),
+        1
+    )
 })
 
 test('scores a title-only query at the top too', () => {
@@ -62,6 +83,18 @@ test('takes the best hit rather than the first', () => {
 test('keeps Deezer ordering when two hits score the same', () => {
     const best = pickBestHit('Creep', [hit('Creep', 'Radiohead', 1), hit('Creep', 'TLC', 2)])
     assert.equal(best.hit.id, 1)
+})
+
+test('matches a song whose entire title sits inside brackets', () => {
+    const intro = pickBestHit('(Intro)', [hit('(Intro)', 'The xx', 1)])
+    const untitled = pickBestHit('[Untitled]', [hit('[Untitled]', 'Sigur Rós', 2)])
+
+    assert.ok(intro)
+    assert.equal(intro.hit.id, 1)
+    assert.equal(intro.confidence, 'high')
+    assert.ok(untitled)
+    assert.equal(untitled.hit.id, 2)
+    assert.equal(untitled.confidence, 'high')
 })
 
 test('refuses everything on offer when nothing answers the query', () => {

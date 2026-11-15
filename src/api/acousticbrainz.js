@@ -189,6 +189,8 @@ function extractAnalysis(body) {
     const lowlevel = body.lowlevel || {}
 
     const number = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : null)
+    const rawBpm = number(rhythm.bpm)
+    const bpm = rawBpm === null ? null : Math.round(rawBpm * 10) / 10
 
     return {
         // "A minor" rather than the two fields it arrives in, because nobody
@@ -199,8 +201,9 @@ function extractAnalysis(body) {
         keyStrength: number(tonal.key_strength) === null ? null : round(tonal.key_strength),
         // The archive ran its own tempo estimate, which fills the tracks Deezer
         // never analysed. Rounded, because it is reported to nine decimal
-        // places and Deezer's own tempo carries one.
-        archiveBpm: number(rhythm.bpm) === null ? null : Math.round(rhythm.bpm * 10) / 10,
+        // places and Deezer's own tempo carries one; zero or below is treated
+        // as unanalysed for the same reason Deezer's zero is.
+        archiveBpm: bpm !== null && bpm > 0 ? bpm : null,
         loudness: number(lowlevel.average_loudness),
         dynamicComplexity: number(lowlevel.dynamic_complexity),
         beatsCount: number(rhythm.beats_count)

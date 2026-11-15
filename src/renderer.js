@@ -64,9 +64,27 @@ filterStatusQ.addEventListener('change', renderOutput)
 //! Lookup
 
 //* Stream each finished song into the output as it arrives
+// Appends in place rather than rewriting innerHTML on every tick, so a user
+// selecting text on an earlier card does not lose their selection when the
+// next song lands.
 window.electronAPI.onProgress((song) => {
     rows.push(song)
-    renderOutput()
+    const status = filterStatusQ.value
+    const query = filterInputQ.value
+    const isFiltered = status !== 'all' || query.trim().length > 0
+    const visible = filterRows(rows, { status, query })
+
+    if (filterRows([song], { status, query }).length > 0) {
+        const empty = outputQ.querySelector('.output__empty')
+        if (empty) empty.remove()
+        outputQ.insertAdjacentHTML('beforeend', songCard(song))
+    } else if (visible.length === 0 && !outputQ.querySelector('.output__empty')) {
+        outputQ.innerHTML = '<p class="output__empty">No songs match the current filter.</p>'
+    }
+
+    filterCountQ.textContent = isFiltered
+        ? `Showing ${visible.length} of ${plural(rows.length, 'song')}`
+        : ''
     renderSummary()
 })
 

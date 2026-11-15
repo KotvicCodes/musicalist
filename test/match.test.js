@@ -27,6 +27,8 @@ test('drops the bracketed edition markers', () => {
     assert.equal(normalise('Levels (VIP Mix)'), 'levels')
     assert.equal(normalise('Levels (Radio Mix)'), 'levels')
     assert.equal(normalise('Levels (Instrumental Mix)'), 'levels')
+    assert.equal(normalise('Levels (Original Mix [Remastered])'), 'levels')
+    assert.equal(normalise('Let It Go (From "Frozen")'), 'let it go')
 })
 
 test('keeps parenthetical words that belong to the title itself', () => {
@@ -34,6 +36,7 @@ test('keeps parenthetical words that belong to the title itself', () => {
     assert.equal(normalise("(Sittin' On) The Dock of the Bay"), 'sittin on the dock of the bay')
     assert.equal(normalise("(I Can't Get No) Satisfaction"), 'i can t get no satisfaction')
     assert.equal(normalise("(Don't Fear) The Reaper (Remastered 2001)"), 'don t fear the reaper')
+    assert.equal(normalise('(Title (Remastered 2011))'), 'title')
     assert.equal(normalise('(Original Sin)'), 'original sin')
     assert.equal(normalise('(Club) Tropicana'), 'club tropicana')
 })
@@ -70,6 +73,8 @@ test('is unmoved by an edition marker', () => {
     assert.equal(scoreHit('Levels', hit('Levels (Original Mix)', 'Avicii')), 1)
     assert.equal(scoreHit('Levels', hit('Levels (Extended Mix)', 'Avicii')), 1)
     assert.equal(scoreHit('Levels', hit('Levels (Club Mix)', 'Avicii')), 1)
+    assert.equal(scoreHit('Levels', hit('Levels (Original Mix [Remastered])', 'Avicii')), 1)
+    assert.equal(scoreHit('Let It Go', hit('Let It Go (From "Frozen")', 'Idina Menzel')), 1)
 })
 
 test('does not let a bare karaoke hit beat a track carrying an Original Mix suffix', () => {

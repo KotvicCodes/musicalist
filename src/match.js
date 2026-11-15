@@ -21,10 +21,27 @@ const DIACRITICS = /[̀-ͯ]/g
 // only brackets that actually name an edition, a feature or a year are dropped,
 // and never when doing so would empty the string.
 const BRACKETED = /[([{][^()[\]{}]*[)\]}]/g
+const ENCLOSING_BRACKETED = /[([{][^)\]}]*[)\]}]/g
 const EDITION_MARKER =
-    /\b(remaster(?:ed)?|live|feat(?:uring)?|ft|with|version|edit(?:ion)?|(?:re)?mix|mono|stereo|deluxe|expanded|anniversary|bonus|explicit|clean|acoustic|demo|instrumental|radio|soundtrack|ost|single|album|session|take|re-?recorded|(?:19|20)\d{2})\b/
+    /^[([{]\s*from\b|\b(remaster(?:ed)?|live|feat(?:uring)?|ft|with|version|edit(?:ion)?|(?:re)?mix|mono|stereo|deluxe|expanded|anniversary|bonus|explicit|clean|acoustic|demo|instrumental|radio|soundtrack|ost|single|album|session|take|re-?recorded|(?:19|20)\d{2})\b/
 
 const NON_WORD = /[^\p{L}\p{N}]+/gu
+
+function stripEditionBrackets(text) {
+    let current = text
+    for (const pattern of [BRACKETED, ENCLOSING_BRACKETED]) {
+        let changed = true
+        while (changed) {
+            changed = false
+            current = current.replace(pattern, (match) => {
+                if (!EDITION_MARKER.test(match)) return match
+                changed = true
+                return ' '
+            })
+        }
+    }
+    return current
+}
 
 function normalise(value) {
     const folded = String(value ?? '')
@@ -32,10 +49,7 @@ function normalise(value) {
         .replace(DIACRITICS, '')
         .toLowerCase()
 
-    const stripped = folded
-        .replace(BRACKETED, (match) => (EDITION_MARKER.test(match) ? ' ' : match))
-        .replace(NON_WORD, ' ')
-        .trim()
+    const stripped = stripEditionBrackets(folded).replace(NON_WORD, ' ').trim()
 
     if (stripped) return stripped
 

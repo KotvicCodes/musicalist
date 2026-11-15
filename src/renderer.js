@@ -6,7 +6,7 @@ const REPO_URL = 'https://github.com/KotvicCodes/musicalist#readme'
 
 const { summarise } = window.MusicalistAnalysis
 const { textToArray } = window.MusicalistText
-const { songCard, summaryCells } = window.MusicalistCard
+const { songCard, summaryCells, achievementList } = window.MusicalistCard
 
 //! Helpers
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`
@@ -26,6 +26,7 @@ const statusQ = document.getElementById('statusQ')
 
 const summaryQ = document.getElementById('summaryQ')
 const summaryStatsQ = document.getElementById('summaryStatsQ')
+const achievementsQ = document.getElementById('achievementsQ')
 const exportJsonQ = document.getElementById('exportJsonQ')
 const exportCsvQ = document.getElementById('exportCsvQ')
 const exportStatusQ = document.getElementById('exportStatusQ')
@@ -138,6 +139,8 @@ function renderSummary() {
         return
     }
 
+    const summary = summarise(rows)
     summaryQ.classList.remove('hidden')
-    summaryStatsQ.innerHTML = summaryCells(summarise(rows)).join('')
+    summaryStatsQ.innerHTML = summaryCells(summary).join('')
+    achievementsQ.innerHTML = achievementList(summary.achievements)
 }

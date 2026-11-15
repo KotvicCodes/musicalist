@@ -12,6 +12,8 @@
     --text-muted: #626d7a;
     --accent: #2f6feb;
     --accent-text: #ffffff;
+    --achievement-bg: #eef4ff;
+    --achievement-border: #b6d0ff;
     --radius: 10px;
     --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
@@ -26,6 +28,8 @@
         --text-muted: #9aa4b1;
         --accent: #4f86ff;
         --accent-text: #ffffff;
+        --achievement-bg: #1c273b;
+        --achievement-border: #345288;
     }
 }
 
@@ -247,6 +251,89 @@ body {
 .stat__detail {
     color: var(--text-muted);
     font-size: 0.8rem;
+}
+
+/*! Achievements */
+
+.achievements {
+    margin-top: 1.1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.achievements__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.achievements__title {
+    margin: 0;
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.achievements__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 0.65rem;
+}
+
+.achievement {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.65rem 0.8rem;
+}
+
+.achievement--unlocked {
+    background: var(--achievement-bg);
+    border-color: var(--achievement-border);
+}
+
+.achievement--locked {
+    opacity: 0.6;
+}
+
+.achievement__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.achievement__title {
+    font-weight: 600;
+    font-size: 0.88rem;
+}
+
+.achievement__badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+}
+
+.achievement--unlocked .achievement__badge {
+    color: var(--accent);
+}
+
+.achievement__desc {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.achievement__detail {
+    margin: 0.15rem 0 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
 }
 
 /*! Output */

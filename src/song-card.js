@@ -199,6 +199,48 @@
         return cells
     }
 
+    //! Achievements
+    // Renders the Achievement Hunt panel from an evaluation report (or a
+    // full summary carrying one). Both unlocked and locked items are shown so
+    // the user can see what is left to hunt for, and every string is escaped
+    // because achievement details quote song titles from external catalogues.
+    function achievementList(report) {
+        const source = report && report.achievements ? report.achievements : report
+        const items = source && Array.isArray(source.items) ? source.items : []
+        if (items.length === 0) return ''
+
+        const unlockedCount =
+            typeof source.unlockedCount === 'number'
+                ? source.unlockedCount
+                : items.filter((item) => item && item.unlocked).length
+        const totalCount = typeof source.totalCount === 'number' ? source.totalCount : items.length
+
+        const cards = items
+            .map((item) => {
+                const stateClass = item.unlocked ? 'achievement--unlocked' : 'achievement--locked'
+                const badge = item.unlocked ? 'Unlocked' : 'Locked'
+                const detail =
+                    item.unlocked && item.detail
+                        ? `<p class="achievement__detail">${escapeHtml(item.detail)}</p>`
+                        : ''
+
+                return `<div class="achievement ${stateClass}" data-achievement="${escapeHtml(item.id || '')}">
+                   <div class="achievement__head">
+                        <span class="achievement__title">${escapeHtml(item.title || '')}</span>
+                        <span class="achievement__badge">${badge}</span>
+                   </div>
+                   <p class="achievement__desc">${escapeHtml(item.description || '')}</p>
+                   ${detail}
+              </div>`
+            })
+            .join('')
+
+        return `<div class="achievements__head">
+              <h3 class="achievements__title">Achievement hunt (${escapeHtml(`${unlockedCount} of ${totalCount} unlocked`)})</h3>
+         </div>
+         <div class="achievements__grid">${cards}</div>`
+    }
+
     //! A Single Song
     function songCard(song) {
         const list = (values) => (values && values.length ? escapeHtml(values.join(', ')) : '—')
@@ -315,7 +357,7 @@
     }
 
     //! Export
-    const api = { songCard, summaryCells, MOOD_LABELS, MOOD_THRESHOLD }
+    const api = { songCard, summaryCells, achievementList, MOOD_LABELS, MOOD_THRESHOLD }
 
     if (loadedAsModule) {
         module.exports = api

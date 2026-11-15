@@ -29,6 +29,12 @@
         'tonal'
     ]
 
+    //! Dependencies
+    const loadedAsModule = typeof module !== 'undefined' && module.exports
+    const { evaluateAchievements } = loadedAsModule
+        ? require('./achievements.js')
+        : window.MusicalistAchievements
+
     //! Helpers
 
     // Deezer serves whichever reissue it happens to carry, so its release date is
@@ -211,7 +217,7 @@
         // worth checking by hand.
         const mismatched = found.filter((row) => row.durationDisagrees === true).length
 
-        return {
+        const summary = {
             total: all.length,
             found: found.length,
             missed: all.length - found.length,
@@ -270,6 +276,9 @@
             },
             mismatched
         }
+
+        summary.achievements = evaluateAchievements(all, summary)
+        return summary
     }
 
     //! Formatting

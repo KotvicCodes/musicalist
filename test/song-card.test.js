@@ -4,7 +4,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { songCard, summaryCells } = require('../src/song-card.js')
+const { songCard, summaryCells, achievementList } = require('../src/song-card.js')
 const { summarise } = require('../src/analysis.js')
 const { songRow } = require('./helpers.js')
 
@@ -204,4 +204,22 @@ test('an empty list yields the song count and nothing else', () => {
 
     assert.equal(empty.length, 1)
     assert.ok(empty[0].includes('Songs'))
+})
+
+//! Achievements
+test('renders unlocked and locked achievements with escaped details', () => {
+    const html = achievementList(
+        summarise([songRow({ title: '<img src=x onerror=alert(1)>', bpm: 170 })])
+    )
+
+    assert.ok(html.includes('Achievement hunt'))
+    assert.ok(html.includes('achievement--unlocked'))
+    assert.ok(html.includes('achievement--locked'))
+    assert.ok(!html.includes('<img'))
+    assert.ok(html.includes('&lt;img'))
+})
+
+test('returns an empty string when given no achievement items', () => {
+    assert.equal(achievementList(null), '')
+    assert.equal(achievementList({ items: [] }), '')
 })

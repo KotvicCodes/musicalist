@@ -39,6 +39,16 @@ test('removes duplicates', () => {
     assert.deepEqual(textToArray('One, Two, One'), ['One', 'Two'])
 })
 
+test('removes duplicates case-insensitively while keeping the first spelling', () => {
+    assert.deepEqual(textToArray('Bohemian Rhapsody, bohemian rhapsody, BOHEMIAN RHAPSODY'), [
+        'Bohemian Rhapsody'
+    ])
+    assert.deepEqual(textToArray('Billie Jean\nbillie jean\nHey Jude', 'newline'), [
+        'Billie Jean',
+        'Hey Jude'
+    ])
+})
+
 test('returns an empty list for empty input', () => {
     assert.deepEqual(textToArray(''), [])
     assert.deepEqual(textToArray('   \n  '), [])
@@ -81,4 +91,27 @@ test('falls back to reading the text when handed a separator it does not know', 
 test('still removes duplicates and empties whichever separator is used', () => {
     assert.deepEqual(textToArray('One\n\nTwo\nOne\n', 'newline'), ['One', 'Two'])
     assert.deepEqual(textToArray('One;;Two;One', 'semicolon'), ['One', 'Two'])
+})
+
+//! Playlist Paste Cleanup
+test('strips numbered and bulleted list markers on newline-separated pastes', () => {
+    const pasted = [
+        '1. Bohemian Rhapsody',
+        '02) Smells Like Teen Spirit',
+        '• Billie Jean',
+        '* Hey, Soul Sister'
+    ].join('\n')
+
+    assert.deepEqual(textToArray(pasted), [
+        'Bohemian Rhapsody',
+        'Smells Like Teen Spirit',
+        'Billie Jean',
+        'Hey, Soul Sister'
+    ])
+})
+
+test('leaves song titles that begin with plain numbers or hyphens untouched', () => {
+    const pasted = ['1979', '99 Luftballons', '-Ame-'].join('\n')
+
+    assert.deepEqual(textToArray(pasted), ['1979', '99 Luftballons', '-Ame-'])
 })

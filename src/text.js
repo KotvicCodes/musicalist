@@ -28,6 +28,8 @@
 
     const AUTO = 'auto'
 
+    const LIST_MARKER = /^(?:\d+[.)]\s+|[•*]\s+)/
+
     // Auto takes newlines whenever the text has any, because one song per line
     // cannot be ambiguous, whereas a comma is as likely to be inside a title as
     // between two. A list that really is comma separated and merely wraps is
@@ -37,10 +39,18 @@
     }
 
     // Someone writing one song per line often still puts a comma at the end of
-    // each. That is punctuation between entries, not part of the last title.
+    // each, or pastes a numbered or bulleted tracklist straight from a blog or
+    // playlist. Plain numbers ("1979", "99 Luftballons") and leading hyphens
+    // ("-Ame-") stay untouched because a list marker always carries a dot, a
+    // closing parenthesis or a bullet followed by whitespace.
     function trimEntry(entry, mode) {
         const trimmed = String(entry).trim()
-        return mode === 'newline' ? trimmed.replace(/[,;]+$/, '').trim() : trimmed
+        return mode === 'newline'
+            ? trimmed
+                  .replace(LIST_MARKER, '')
+                  .replace(/[,;]+$/, '')
+                  .trim()
+            : trimmed
     }
 
     //! Collect Songs From Textarea
@@ -55,8 +65,14 @@
             .map((entry) => trimEntry(entry, mode))
             .filter((entry) => entry.length > 0)
 
-        // remove duplicates
-        return [...new Set(entries)]
+        // remove duplicates case-insensitively, keeping the first spelling
+        const seen = new Set()
+        return entries.filter((entry) => {
+            const key = entry.toLowerCase()
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+        })
     }
 
     //! Export

@@ -74,7 +74,21 @@ function asMbid(value) {
 }
 
 //! Helpers
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+function sleep(ms, signal) {
+    if (signal && signal.aborted) return Promise.resolve()
+
+    return new Promise((resolve) => {
+        const onAbort = () => {
+            clearTimeout(timer)
+            resolve()
+        }
+        const timer = setTimeout(() => {
+            if (signal) signal.removeEventListener('abort', onAbort)
+            resolve()
+        }, ms)
+        if (signal) signal.addEventListener('abort', onAbort, { once: true })
+    })
+}
 
 //! Throttle
 // Every request funnels through one promise chain, so calls are serialised and
@@ -128,7 +142,8 @@ async function request(url, signal, { attempt = 1, busyWaitMs = BUSY_WAIT_MS } =
 
     // Widening, because a throttle that is still on after two seconds is not
     // going to clear in another two.
-    await sleep(busyWaitMs * attempt)
+    await sleep(busyWaitMs * attempt, signal)
+    if (signal && signal.aborted) return null
     return request(url, signal, { attempt: attempt + 1, busyWaitMs })
 }
 
@@ -318,8 +333,8 @@ function escapeQuery(value) {
 // scorers and keep the one that looks like the original studio release.
 //
 // The ISRC endpoint returns neither scores nor releases, which this degrades to
-// cleanly: every entry ties at score 0 with no release group to inspect, so the
-// release date alone decides.
+// cleanly: every entry ties at score 0 with no release group to inspect, so
+// audio vs video, the release date and any version note decide.
 function pickRecording(recordings) {
     if (!Array.isArray(recordings) || recordings.length === 0) return null
 
@@ -330,13 +345,23 @@ function pickRecording(recordings) {
         const groups = (entry.releases || []).map((release) => release['release-group']).filter(Boolean)
         return {
             entry,
-            // an original pressing exists among this recording's releases
-            repackaged: groups.length && groups.every(isRepackaging) ? 1 : 0,
-            date: entry['first-release-date'] || '9999'
+            // An original pressing beats a bare recording with no releases at
+            // all, which in turn beats one that only ever appeared on
+            // compilations or live albums.
+            repackaged: groups.length === 0 ? 1 : groups.every(isRepackaging) ? 2 : 0,
+            video: entry.video === true ? 1 : 0,
+            date: entry['first-release-date'] || '9999',
+            disambiguation: entry.disambiguation ? 1 : 0
         }
     })
 
-    scored.sort((a, b) => a.repackaged - b.repackaged || a.date.localeCompare(b.date))
+    scored.sort(
+        (a, b) =>
+            a.repackaged - b.repackaged ||
+            a.video - b.video ||
+            a.date.localeCompare(b.date) ||
+            a.disambiguation - b.disambiguation
+    )
     return asMbid(scored[0].entry.id)
 }
 

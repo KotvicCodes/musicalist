@@ -62,7 +62,21 @@ class DeezerError extends Error {
 }
 
 //! Helpers
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+function sleep(ms, signal) {
+    if (signal && signal.aborted) return Promise.resolve()
+
+    return new Promise((resolve) => {
+        const onAbort = () => {
+            clearTimeout(timer)
+            resolve()
+        }
+        const timer = setTimeout(() => {
+            if (signal) signal.removeEventListener('abort', onAbort)
+            resolve()
+        }, ms)
+        if (signal) signal.addEventListener('abort', onAbort, { once: true })
+    })
+}
 
 // An aborted fetch and an aborted body read both surface as the signal's own
 // reason, so the two call sites ask the same question.
@@ -161,7 +175,10 @@ async function request(
             throw new DeezerError('The run was stopped.', { kind: 'cancelled' })
         }
 
-        await sleep(quotaWaitMs)
+        await sleep(quotaWaitMs, signal)
+        if (signal && signal.aborted) {
+            throw new DeezerError('The run was stopped.', { kind: 'cancelled' })
+        }
         return request(path, { attempt: attempt + 1, quotaWaitMs, timeoutMs, signal })
     }
 

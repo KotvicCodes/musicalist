@@ -20,6 +20,13 @@ test('drops the bracketed edition markers', () => {
     // which pressing this is, not which song; MusicBrainz settles that question
     assert.equal(normalise('Bohemian Rhapsody (Remastered 2011)'), 'bohemian rhapsody')
     assert.equal(normalise('Creep [Live]'), 'creep')
+    assert.equal(normalise('Levels (Original Mix)'), 'levels')
+    assert.equal(normalise('Levels (Extended Mix)'), 'levels')
+    assert.equal(normalise('Levels (Club Mix)'), 'levels')
+    assert.equal(normalise('Levels (Dub Mix)'), 'levels')
+    assert.equal(normalise('Levels (VIP Mix)'), 'levels')
+    assert.equal(normalise('Levels (Radio Mix)'), 'levels')
+    assert.equal(normalise('Levels (Instrumental Mix)'), 'levels')
 })
 
 test('keeps parenthetical words that belong to the title itself', () => {
@@ -27,6 +34,8 @@ test('keeps parenthetical words that belong to the title itself', () => {
     assert.equal(normalise("(Sittin' On) The Dock of the Bay"), 'sittin on the dock of the bay')
     assert.equal(normalise("(I Can't Get No) Satisfaction"), 'i can t get no satisfaction')
     assert.equal(normalise("(Don't Fear) The Reaper (Remastered 2001)"), 'don t fear the reaper')
+    assert.equal(normalise('(Original Sin)'), 'original sin')
+    assert.equal(normalise('(Club) Tropicana'), 'club tropicana')
 })
 
 test('never strips a title down to nothing when the whole name is in brackets', () => {
@@ -34,6 +43,8 @@ test('never strips a title down to nothing when the whole name is in brackets', 
     assert.equal(normalise('[Untitled]'), 'untitled')
     assert.equal(normalise('(Live)'), 'live')
     assert.equal(normalise('[Instrumental]'), 'instrumental')
+    assert.equal(normalise('(Intro) (Remastered 2011)'), 'intro')
+    assert.equal(normalise('(Live) (Remastered 2011)'), 'live')
 })
 
 //! Scoring
@@ -58,6 +69,7 @@ test('is unmoved by an edition marker', () => {
     assert.equal(scoreHit('Bohemian Rhapsody', hit('Bohemian Rhapsody (Remastered 2011)', 'Queen')), 1)
     assert.equal(scoreHit('Levels', hit('Levels (Original Mix)', 'Avicii')), 1)
     assert.equal(scoreHit('Levels', hit('Levels (Extended Mix)', 'Avicii')), 1)
+    assert.equal(scoreHit('Levels', hit('Levels (Club Mix)', 'Avicii')), 1)
 })
 
 test('does not let a bare karaoke hit beat a track carrying an Original Mix suffix', () => {

@@ -22,7 +22,7 @@ const DIACRITICS = /[̀-ͯ]/g
 // and never when doing so would empty the string.
 const BRACKETED = /[([{][^()[\]{}]*[)\]}]/g
 const EDITION_MARKER =
-    /\b(remaster(?:ed)?|live|feat(?:uring)?|ft|with|version|edit(?:ion)?|re?mix|mono|stereo|deluxe|expanded|anniversary|bonus|explicit|clean|acoustic|demo|instrumental|radio|soundtrack|ost|single|album|session|take|re-?recorded|(?:19|20)\d{2})\b/
+    /\b(remaster(?:ed)?|live|feat(?:uring)?|ft|with|version|edit(?:ion)?|(?:re)?mix|original|extended|club|dub|mono|stereo|deluxe|expanded|anniversary|bonus|explicit|clean|acoustic|demo|instrumental|radio|soundtrack|ost|single|album|session|take|re-?recorded|(?:19|20)\d{2})\b/
 
 const NON_WORD = /[^\p{L}\p{N}]+/gu
 

@@ -56,6 +56,18 @@ test('scores a title-only query at the top too', () => {
 
 test('is unmoved by an edition marker', () => {
     assert.equal(scoreHit('Bohemian Rhapsody', hit('Bohemian Rhapsody (Remastered 2011)', 'Queen')), 1)
+    assert.equal(scoreHit('Levels', hit('Levels (Original Mix)', 'Avicii')), 1)
+    assert.equal(scoreHit('Levels', hit('Levels (Extended Mix)', 'Avicii')), 1)
+})
+
+test('does not let a bare karaoke hit beat a track carrying an Original Mix suffix', () => {
+    const best = pickBestHit('Levels', [
+        hit('Levels (Original Mix)', 'Avicii', 1),
+        hit('Levels', 'Karaoke Band', 2)
+    ])
+
+    assert.equal(best.hit.id, 1)
+    assert.equal(best.confidence, 'high')
 })
 
 test('marks down a hit padded with words nobody asked about', () => {

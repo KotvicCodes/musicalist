@@ -4,7 +4,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { pickBestHit, scoreHit, confidenceOf, normalise } = require('../src/match.js')
+const { pickBestHit, scoreHit, confidenceOf, normalise, MATCH_FLOOR } = require('../src/match.js')
 
 //! Helpers
 const hit = (title, artist, id = 1) => ({ id, title, artist: { name: artist } })
@@ -31,6 +31,14 @@ test('drops the bracketed edition markers', () => {
     assert.equal(normalise('Let It Go (From "Frozen")'), 'let it go')
 })
 
+test('drops any trailing bracket, not only ones naming a known edition word', () => {
+    // a keyword list can never be complete; position is what marks a suffix
+    assert.equal(normalise('Take On Me (MTV Unplugged)'), 'take on me')
+    assert.equal(normalise('Levels (Extended)'), 'levels')
+    assert.equal(normalise('Levels (Sped Up)'), 'levels')
+    assert.equal(normalise('Levels [Nightcore] (Sped Up)'), 'levels')
+})
+
 test('keeps parenthetical words that belong to the title itself', () => {
     assert.equal(normalise("(Don't Fear) The Reaper"), 'don t fear the reaper')
     assert.equal(normalise("(Sittin' On) The Dock of the Bay"), 'sittin on the dock of the bay')
@@ -48,6 +56,14 @@ test('never strips a title down to nothing when the whole name is in brackets', 
     assert.equal(normalise('[Instrumental]'), 'instrumental')
     assert.equal(normalise('(Intro) (Remastered 2011)'), 'intro')
     assert.equal(normalise('(Live) (Remastered 2011)'), 'live')
+    assert.equal(normalise('(Live [Remastered 2011])'), 'live')
+    assert.equal(normalise('([Intro])'), 'intro')
+    assert.equal(normalise('()'), '')
+})
+
+test('treats a bracket that never closes as ordinary text', () => {
+    assert.equal(normalise('Song (Live'), 'song live')
+    assert.equal(normalise('(Live [Remastered]'), 'live')
 })
 
 //! Scoring
@@ -112,6 +128,23 @@ test('takes the best hit rather than the first', () => {
 test('keeps Deezer ordering when two hits score the same', () => {
     const best = pickBestHit('Creep', [hit('Creep', 'Radiohead', 1), hit('Creep', 'TLC', 2)])
     assert.equal(best.hit.id, 1)
+})
+
+test('does not let a bare karaoke hit beat an unplugged original', () => {
+    const best = pickBestHit('Take On Me', [
+        hit('Take On Me (MTV Unplugged)', 'a-ha', 1),
+        hit('Take On Me', 'Karaoke Band', 2)
+    ])
+
+    assert.equal(best.hit.id, 1)
+    assert.equal(best.confidence, 'high')
+})
+
+test('reads a bracket-only title by its outer bracket, not its innermost tag', () => {
+    const track = hit('(Live [Remastered 2011])', 'Someone')
+
+    assert.equal(scoreHit('Live', track), 1)
+    assert.ok(scoreHit('Remastered 2011', track) < MATCH_FLOOR)
 })
 
 test('matches a song whose entire title sits inside brackets', () => {

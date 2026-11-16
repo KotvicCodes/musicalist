@@ -16,31 +16,68 @@ const DIACRITICS = /[̀-ͯ]/g
 // the pressing question. Dropping them makes the comparison about identity.
 //
 // Plenty of real titles open with or consist of brackets though: "(Don't Fear)
-// The Reaper", "(Sittin' On) The Dock of the Bay", "(Intro)". Stripping every
-// bracket unconditionally threw away half the title or left nothing at all, so
-// only brackets that actually name an edition, a feature or a year are dropped,
-// and never when doing so would empty the string.
-const BRACKETED = /[([{][^()[\]{}]*[)\]}]/g
-const ENCLOSING_BRACKETED = /[([{][^)\]}]*[)\]}]/g
-const EDITION_MARKER =
-    /^[([{]\s*from\b|\b(remaster(?:ed)?|live|feat(?:uring)?|ft|with|version|edit(?:ion)?|(?:re)?mix|mono|stereo|deluxe|expanded|anniversary|bonus|explicit|clean|acoustic|demo|instrumental|radio|soundtrack|ost|single|album|session|take|re-?recorded|(?:19|20)\d{2})\b/
+// The Reaper", "(Sittin' On) The Dock of the Bay", "(Intro)". So position
+// decides, not vocabulary: brackets before the first title word are part of
+// the title and stay, every bracket after it is a suffix and goes, whatever it
+// says (MTV Unplugged, Sped Up, Extended). A title that is nothing but brackets
+// is its first bracket, unwrapped and read the same way, so "(Live [Remastered
+// 2011])" is "live".
+const OPENERS = '([{'
+const CLOSERS = ')]}'
+const WORD = /[\p{L}\p{N}]/u
 
 const NON_WORD = /[^\p{L}\p{N}]+/gu
 
-function stripEditionBrackets(text) {
-    let current = text
-    for (const pattern of [BRACKETED, ENCLOSING_BRACKETED]) {
-        let changed = true
-        while (changed) {
-            changed = false
-            current = current.replace(pattern, (match) => {
-                if (!EDITION_MARKER.test(match)) return match
-                changed = true
-                return ' '
-            })
+// Where the bracket opened at `start` closes, counting nesting; -1 if never.
+function closingIndex(text, start) {
+    let depth = 0
+    for (let index = start; index < text.length; index += 1) {
+        if (OPENERS.includes(text[index])) depth += 1
+        else if (CLOSERS.includes(text[index])) {
+            depth -= 1
+            if (depth === 0) return index
         }
     }
-    return current
+    return -1
+}
+
+// Top-level runs of plain text and bracketed groups; an opener that never
+// closes is just a character.
+function segments(text) {
+    const parts = []
+    let plain = ''
+    let index = 0
+
+    while (index < text.length) {
+        const end = OPENERS.includes(text[index]) ? closingIndex(text, index) : -1
+        if (end === -1) {
+            plain += text[index]
+            index += 1
+            continue
+        }
+        if (plain) parts.push({ bracketed: false, text: plain })
+        plain = ''
+        parts.push({ bracketed: true, text: text.slice(index + 1, end) })
+        index = end + 1
+    }
+    if (plain) parts.push({ bracketed: false, text: plain })
+
+    return parts
+}
+
+function titleOf(text) {
+    const parts = segments(text)
+    const titleStart = parts.findIndex((part) => !part.bracketed && WORD.test(part.text))
+
+    if (titleStart === -1) {
+        const first = parts.find((part) => part.bracketed)
+        return first ? titleOf(first.text) : text
+    }
+
+    return parts
+        .filter((part, index) => !part.bracketed || index < titleStart)
+        .map((part) => part.text)
+        .join(' ')
 }
 
 function normalise(value) {
@@ -49,12 +86,7 @@ function normalise(value) {
         .replace(DIACRITICS, '')
         .toLowerCase()
 
-    const stripped = stripEditionBrackets(folded).replace(NON_WORD, ' ').trim()
-
-    if (stripped) return stripped
-
-    const firstBracket = folded.match(BRACKETED)?.[0] ?? ''
-    return firstBracket.replace(NON_WORD, ' ').trim() || folded.replace(NON_WORD, ' ').trim()
+    return titleOf(folded).replace(NON_WORD, ' ').trim()
 }
 
 function tokenise(value) {

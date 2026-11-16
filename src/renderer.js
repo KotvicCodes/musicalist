@@ -43,6 +43,9 @@ helpButtonQ.addEventListener('click', () => {
 
 //! Keyboard Shortcuts
 inputTextareaQ.addEventListener('keydown', (event) => {
+    // An Enter that confirms an IME composition belongs to the input method,
+    // not to the app; acting on it would look up a half-typed title.
+    if (event.isComposing) return
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !scrapeButtonQ.disabled) {
         event.preventDefault()
         scrapeButtonQ.click()

@@ -348,6 +348,15 @@ test('Ctrl+Enter and Meta+Enter on inputTextareaQ trigger a lookup when Proceed 
     assert.equal(plainEnter.defaultPrevented, false)
     assert.equal(calls.runLookup.length, 0)
 
+    const composingEnter = inputTextareaQ.dispatch('keydown', {
+        key: 'Enter',
+        ctrlKey: true,
+        metaKey: false,
+        isComposing: true
+    })
+    assert.equal(composingEnter.defaultPrevented, false)
+    assert.equal(calls.runLookup.length, 0)
+
     const ctrlEnter = inputTextareaQ.dispatch('keydown', {
         key: 'Enter',
         ctrlKey: true,

@@ -29,13 +29,16 @@ const WORD = /[\p{L}\p{N}]/u
 const NON_WORD = /[^\p{L}\p{N}]+/gu
 
 // Where the bracket opened at `start` closes, counting nesting; -1 if never.
+// Only the matching kind closes a bracket, so "(Part 1]" is left open; a stray
+// closer of the wrong kind is just a character.
 function closingIndex(text, start) {
-    let depth = 0
+    const expected = []
     for (let index = start; index < text.length; index += 1) {
-        if (OPENERS.includes(text[index])) depth += 1
-        else if (CLOSERS.includes(text[index])) {
-            depth -= 1
-            if (depth === 0) return index
+        const opener = OPENERS.indexOf(text[index])
+        if (opener !== -1) expected.push(CLOSERS[opener])
+        else if (text[index] === expected[expected.length - 1]) {
+            expected.pop()
+            if (expected.length === 0) return index
         }
     }
     return -1

@@ -64,6 +64,8 @@ test('never strips a title down to nothing when the whole name is in brackets', 
 test('treats a bracket that never closes as ordinary text', () => {
     assert.equal(normalise('Song (Live'), 'song live')
     assert.equal(normalise('(Live [Remastered]'), 'live')
+    assert.equal(normalise('Song (Part 1]'), 'song part 1')
+    assert.equal(normalise('Song (Live ] Version)'), 'song')
 })
 
 //! Scoring

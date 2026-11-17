@@ -253,3 +253,9 @@ test('skips the low-level request entirely without a recording id', async (t) =>
 test('rounds the archive tempo, which arrives to nine decimal places', () => {
     assert.equal(extractAnalysis({ rhythm: { bpm: 140.279327393 } }).archiveBpm, 140.3)
 })
+
+test('treats a zero or negative archive tempo as unanalysed', () => {
+    assert.equal(extractAnalysis({ rhythm: { bpm: 0 } }).archiveBpm, null)
+    assert.equal(extractAnalysis({ rhythm: { bpm: 0.04 } }).archiveBpm, null)
+    assert.equal(extractAnalysis({ rhythm: { bpm: -120 } }).archiveBpm, null)
+})

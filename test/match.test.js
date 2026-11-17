@@ -4,7 +4,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
-const { pickBestHit, scoreHit, confidenceOf, normalise } = require('../src/match.js')
+const { pickBestHit, scoreHit, confidenceOf, normalise, MATCH_FLOOR } = require('../src/match.js')
 
 //! Helpers
 const hit = (title, artist, id = 1) => ({ id, title, artist: { name: artist } })
@@ -20,11 +20,64 @@ test('drops the bracketed edition markers', () => {
     // which pressing this is, not which song; MusicBrainz settles that question
     assert.equal(normalise('Bohemian Rhapsody (Remastered 2011)'), 'bohemian rhapsody')
     assert.equal(normalise('Creep [Live]'), 'creep')
+    assert.equal(normalise('Levels (Original Mix)'), 'levels')
+    assert.equal(normalise('Levels (Extended Mix)'), 'levels')
+    assert.equal(normalise('Levels (Club Mix)'), 'levels')
+    assert.equal(normalise('Levels (Dub Mix)'), 'levels')
+    assert.equal(normalise('Levels (VIP Mix)'), 'levels')
+    assert.equal(normalise('Levels (Radio Mix)'), 'levels')
+    assert.equal(normalise('Levels (Instrumental Mix)'), 'levels')
+    assert.equal(normalise('Levels (Original Mix [Remastered])'), 'levels')
+    assert.equal(normalise('Let It Go (From "Frozen")'), 'let it go')
+})
+
+test('drops any trailing bracket, not only ones naming a known edition word', () => {
+    // a keyword list can never be complete; position is what marks a suffix
+    assert.equal(normalise('Take On Me (MTV Unplugged)'), 'take on me')
+    assert.equal(normalise('Levels (Extended)'), 'levels')
+    assert.equal(normalise('Levels (Sped Up)'), 'levels')
+    assert.equal(normalise('Levels [Nightcore] (Sped Up)'), 'levels')
+})
+
+test('keeps parenthetical words that belong to the title itself', () => {
+    assert.equal(normalise("(Don't Fear) The Reaper"), 'don t fear the reaper')
+    assert.equal(normalise("(Sittin' On) The Dock of the Bay"), 'sittin on the dock of the bay')
+    assert.equal(normalise("(I Can't Get No) Satisfaction"), 'i can t get no satisfaction')
+    assert.equal(normalise("(Don't Fear) The Reaper (Remastered 2001)"), 'don t fear the reaper')
+    assert.equal(normalise('(Title (Remastered 2011))'), 'title')
+    assert.equal(normalise('(Original Sin)'), 'original sin')
+    assert.equal(normalise('(Club) Tropicana'), 'club tropicana')
+})
+
+test('never strips a title down to nothing when the whole name is in brackets', () => {
+    assert.equal(normalise('(Intro)'), 'intro')
+    assert.equal(normalise('[Untitled]'), 'untitled')
+    assert.equal(normalise('(Live)'), 'live')
+    assert.equal(normalise('[Instrumental]'), 'instrumental')
+    assert.equal(normalise('(Intro) (Remastered 2011)'), 'intro')
+    assert.equal(normalise('(Live) (Remastered 2011)'), 'live')
+    assert.equal(normalise('(Live [Remastered 2011])'), 'live')
+    assert.equal(normalise('([Intro])'), 'intro')
+    assert.equal(normalise('()'), '')
+})
+
+test('treats a bracket that never closes as ordinary text', () => {
+    assert.equal(normalise('Song (Live'), 'song live')
+    assert.equal(normalise('(Live [Remastered]'), 'live')
+    assert.equal(normalise('Song (Part 1]'), 'song part 1')
+    assert.equal(normalise('Song (Live ] Version)'), 'song')
 })
 
 //! Scoring
 test('scores an exact title and artist at the top', () => {
     assert.equal(scoreHit('Bohemian Rhapsody Queen', hit('Bohemian Rhapsody', 'Queen')), 1)
+})
+
+test('scores a parenthetical title at the top even when the query omits the brackets', () => {
+    assert.equal(
+        scoreHit("Don't Fear The Reaper", hit("(Don't Fear) The Reaper", 'Blue Öyster Cult')),
+        1
+    )
 })
 
 test('scores a title-only query at the top too', () => {
@@ -35,6 +88,21 @@ test('scores a title-only query at the top too', () => {
 
 test('is unmoved by an edition marker', () => {
     assert.equal(scoreHit('Bohemian Rhapsody', hit('Bohemian Rhapsody (Remastered 2011)', 'Queen')), 1)
+    assert.equal(scoreHit('Levels', hit('Levels (Original Mix)', 'Avicii')), 1)
+    assert.equal(scoreHit('Levels', hit('Levels (Extended Mix)', 'Avicii')), 1)
+    assert.equal(scoreHit('Levels', hit('Levels (Club Mix)', 'Avicii')), 1)
+    assert.equal(scoreHit('Levels', hit('Levels (Original Mix [Remastered])', 'Avicii')), 1)
+    assert.equal(scoreHit('Let It Go', hit('Let It Go (From "Frozen")', 'Idina Menzel')), 1)
+})
+
+test('does not let a bare karaoke hit beat a track carrying an Original Mix suffix', () => {
+    const best = pickBestHit('Levels', [
+        hit('Levels (Original Mix)', 'Avicii', 1),
+        hit('Levels', 'Karaoke Band', 2)
+    ])
+
+    assert.equal(best.hit.id, 1)
+    assert.equal(best.confidence, 'high')
 })
 
 test('marks down a hit padded with words nobody asked about', () => {
@@ -62,6 +130,35 @@ test('takes the best hit rather than the first', () => {
 test('keeps Deezer ordering when two hits score the same', () => {
     const best = pickBestHit('Creep', [hit('Creep', 'Radiohead', 1), hit('Creep', 'TLC', 2)])
     assert.equal(best.hit.id, 1)
+})
+
+test('does not let a bare karaoke hit beat an unplugged original', () => {
+    const best = pickBestHit('Take On Me', [
+        hit('Take On Me (MTV Unplugged)', 'a-ha', 1),
+        hit('Take On Me', 'Karaoke Band', 2)
+    ])
+
+    assert.equal(best.hit.id, 1)
+    assert.equal(best.confidence, 'high')
+})
+
+test('reads a bracket-only title by its outer bracket, not its innermost tag', () => {
+    const track = hit('(Live [Remastered 2011])', 'Someone')
+
+    assert.equal(scoreHit('Live', track), 1)
+    assert.ok(scoreHit('Remastered 2011', track) < MATCH_FLOOR)
+})
+
+test('matches a song whose entire title sits inside brackets', () => {
+    const intro = pickBestHit('(Intro)', [hit('(Intro)', 'The xx', 1)])
+    const untitled = pickBestHit('[Untitled]', [hit('[Untitled]', 'Sigur Rós', 2)])
+
+    assert.ok(intro)
+    assert.equal(intro.hit.id, 1)
+    assert.equal(intro.confidence, 'high')
+    assert.ok(untitled)
+    assert.equal(untitled.hit.id, 2)
+    assert.equal(untitled.confidence, 'high')
 })
 
 test('refuses everything on offer when nothing answers the query', () => {

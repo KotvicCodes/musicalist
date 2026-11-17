@@ -31,19 +31,22 @@
 
     //! Helpers
 
+    // Requires a four-digit year from 1000 onwards, so placeholder strings like
+    // "0000-00-00" or truncated dates like "20" or "-100" never bucket into
+    // nonsensical decades or skew reissue drift.
+    function yearOf(value) {
+        if (!value) return null
+        const text = String(value)
+        if (!/^\d{4}(?!\d)/.test(text)) return null
+        const year = parseInt(text.slice(0, 4), 10)
+        return year >= 1000 ? year : null
+    }
+
     // Deezer serves whichever reissue it happens to carry, so its release date is
     // often decades late. MusicBrainz's original date wins when we have it.
     function effectiveYear(row) {
-        const source = row.originalReleaseDate || (row.releaseDate && row.releaseDate[0])
-        if (!source) return null
-        const year = parseInt(String(source).slice(0, 4), 10)
-        return Number.isFinite(year) ? year : null
-    }
-
-    function yearOf(value) {
-        if (!value) return null
-        const year = parseInt(String(value).slice(0, 4), 10)
-        return Number.isFinite(year) ? year : null
+        if (!row) return null
+        return yearOf(row.originalReleaseDate) ?? yearOf(row.releaseDate && row.releaseDate[0])
     }
 
     // Count occurrences into a Map, then hand back the busiest entries.
@@ -284,7 +287,7 @@
     //! Export
     // Loaded two ways: as a CommonJS module by the tests and the main
     // process, and as a plain script by the renderer, which has no require().
-    const api = { summarise, formatDuration, effectiveYear, MOOD_FIELDS }
+    const api = { summarise, formatDuration, effectiveYear, yearOf, MOOD_FIELDS }
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = api

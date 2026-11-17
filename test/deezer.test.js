@@ -218,6 +218,37 @@ test('picks the candidate that answers the query, not the first', async (t) => {
     assert.ok(fetch.calls.some((call) => call.url.includes('/track/2')))
 })
 
+test('keeps a top hit with an edition mix suffix over a bare karaoke cover', async (t) => {
+    const fetch = stubDeezer({
+        hits: [
+            deezerHit({
+                id: 1,
+                title: 'Levels (Original Mix)',
+                artist: { id: 7, name: 'Avicii' }
+            }),
+            deezerHit({
+                id: 2,
+                title: 'Levels',
+                artist: { id: 9, name: 'Karaoke Band' }
+            })
+        ],
+        track: deezerTrack({
+            id: 1,
+            title: 'Levels (Original Mix)',
+            artist: { id: 7, name: 'Avicii' },
+            contributors: [{ id: 7, name: 'Avicii', role: 'Main' }]
+        })
+    })
+    t.after(fetch.restore)
+
+    const track = await createClient().searchTrack('Levels')
+
+    assert.equal(track.author, 'Avicii')
+    assert.equal(track.matchConfidence, 'high')
+    assert.equal(track.matchScore, 1)
+    assert.ok(fetch.calls.some((call) => call.url.includes('/track/1')))
+})
+
 test('reports how well the answer matched the query', async (t) => {
     const fetch = stubDeezer({ hits: [deezerHit({ title: 'Bohemian Rhapsody' })] })
     t.after(fetch.restore)

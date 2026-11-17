@@ -14,18 +14,82 @@ const DIACRITICS = /[̀-ͯ]/g
 // Edition markers live in brackets: (Remastered 2011), [Live], (feat. X). They
 // say which pressing this is, not which song, and MusicBrainz is what settles
 // the pressing question. Dropping them makes the comparison about identity.
-const BRACKETED = /[([{][^)\]}]*[)\]}]/g
+//
+// Plenty of real titles open with or consist of brackets though: "(Don't Fear)
+// The Reaper", "(Sittin' On) The Dock of the Bay", "(Intro)". So position
+// decides, not vocabulary: brackets before the first title word are part of
+// the title and stay, every bracket after it is a suffix and goes, whatever it
+// says (MTV Unplugged, Sped Up, Extended). A title that is nothing but brackets
+// is its first bracket, unwrapped and read the same way, so "(Live [Remastered
+// 2011])" is "live".
+const OPENERS = '([{'
+const CLOSERS = ')]}'
+const WORD = /[\p{L}\p{N}]/u
 
 const NON_WORD = /[^\p{L}\p{N}]+/gu
 
+// Where the bracket opened at `start` closes, counting nesting; -1 if never.
+// Only the matching kind closes a bracket, so "(Part 1]" is left open; a stray
+// closer of the wrong kind is just a character.
+function closingIndex(text, start) {
+    const expected = []
+    for (let index = start; index < text.length; index += 1) {
+        const opener = OPENERS.indexOf(text[index])
+        if (opener !== -1) expected.push(CLOSERS[opener])
+        else if (text[index] === expected[expected.length - 1]) {
+            expected.pop()
+            if (expected.length === 0) return index
+        }
+    }
+    return -1
+}
+
+// Top-level runs of plain text and bracketed groups; an opener that never
+// closes is just a character.
+function segments(text) {
+    const parts = []
+    let plain = ''
+    let index = 0
+
+    while (index < text.length) {
+        const end = OPENERS.includes(text[index]) ? closingIndex(text, index) : -1
+        if (end === -1) {
+            plain += text[index]
+            index += 1
+            continue
+        }
+        if (plain) parts.push({ bracketed: false, text: plain })
+        plain = ''
+        parts.push({ bracketed: true, text: text.slice(index + 1, end) })
+        index = end + 1
+    }
+    if (plain) parts.push({ bracketed: false, text: plain })
+
+    return parts
+}
+
+function titleOf(text) {
+    const parts = segments(text)
+    const titleStart = parts.findIndex((part) => !part.bracketed && WORD.test(part.text))
+
+    if (titleStart === -1) {
+        const first = parts.find((part) => part.bracketed)
+        return first ? titleOf(first.text) : text
+    }
+
+    return parts
+        .filter((part, index) => !part.bracketed || index < titleStart)
+        .map((part) => part.text)
+        .join(' ')
+}
+
 function normalise(value) {
-    return String(value ?? '')
+    const folded = String(value ?? '')
         .normalize('NFD')
         .replace(DIACRITICS, '')
         .toLowerCase()
-        .replace(BRACKETED, ' ')
-        .replace(NON_WORD, ' ')
-        .trim()
+
+    return titleOf(folded).replace(NON_WORD, ' ').trim()
 }
 
 function tokenise(value) {

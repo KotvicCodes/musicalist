@@ -20,6 +20,7 @@
         <link rel="stylesheet" href="index.css" />
         <script defer src="text.js"></script>
         <script defer src="analysis.js"></script>
+        <script defer src="filter.js"></script>
         <script defer src="song-card.js"></script>
         <script defer src="renderer.js"></script>
     </head>
@@ -76,6 +77,23 @@
                     </div>
                 </div>
                 <div id="summaryStatsQ" class="summary__stats"></div>
+                <div class="filter">
+                    <input
+                        id="filterInputQ"
+                        type="search"
+                        class="field__input filter__search"
+                        placeholder="Filter by title, artist, genre, tag…"
+                        aria-label="Filter results"
+                    />
+                    <label class="field__inline" for="filterStatusQ">Show</label>
+                    <select id="filterStatusQ" class="field__select">
+                        <option value="all" selected>All</option>
+                        <option value="found">Found</option>
+                        <option value="missed">Not found</option>
+                        <option value="check">Worth checking</option>
+                    </select>
+                    <span id="filterCountQ" class="status" aria-live="polite"></span>
+                </div>
             </section>
 
             <!--* Output -->

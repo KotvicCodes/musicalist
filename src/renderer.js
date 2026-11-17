@@ -5,6 +5,7 @@
 const REPO_URL = 'https://github.com/KotvicCodes/musicalist#readme'
 
 const { summarise } = window.MusicalistAnalysis
+const { filterRows } = window.MusicalistFilter
 const { textToArray } = window.MusicalistText
 const { songCard, summaryCells } = window.MusicalistCard
 
@@ -29,6 +30,9 @@ const summaryStatsQ = document.getElementById('summaryStatsQ')
 const exportJsonQ = document.getElementById('exportJsonQ')
 const exportCsvQ = document.getElementById('exportCsvQ')
 const exportStatusQ = document.getElementById('exportStatusQ')
+const filterInputQ = document.getElementById('filterInputQ')
+const filterStatusQ = document.getElementById('filterStatusQ')
+const filterCountQ = document.getElementById('filterCountQ')
 
 const helpButtonQ = document.getElementById('helpButtonQ')
 
@@ -37,12 +41,53 @@ helpButtonQ.addEventListener('click', () => {
     window.electronAPI.openExternal(REPO_URL)
 })
 
+//! Keyboard Shortcuts
+inputTextareaQ.addEventListener('keydown', (event) => {
+    // An Enter that confirms an IME composition belongs to the input method,
+    // not to the app; acting on it would look up a half-typed title.
+    if (event.isComposing) return
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !scrapeButtonQ.disabled) {
+        event.preventDefault()
+        scrapeButtonQ.click()
+    }
+})
+
+document.addEventListener('keydown', (event) => {
+    if (event.target === filterInputQ && filterInputQ.value) return
+    if (event.key === 'Escape' && !stopButtonQ.classList.contains('hidden') && !stopButtonQ.disabled) {
+        event.preventDefault()
+        stopButtonQ.click()
+    }
+})
+
+//! Filtering
+filterInputQ.addEventListener('input', renderOutput)
+filterStatusQ.addEventListener('change', renderOutput)
+
 //! Lookup
 
 //* Stream each finished song into the output as it arrives
+// Appends in place rather than rewriting innerHTML on every tick, so a user
+// selecting text on an earlier card does not lose their selection when the
+// next song lands.
 window.electronAPI.onProgress((song) => {
     rows.push(song)
-    outputQ.insertAdjacentHTML('beforeend', songCard(song))
+    const status = filterStatusQ.value
+    const query = filterInputQ.value
+    const isFiltered = status !== 'all' || query.trim().length > 0
+    const visible = filterRows(rows, { status, query })
+
+    if (filterRows([song], { status, query }).length > 0) {
+        const empty = outputQ.querySelector('.output__empty')
+        if (empty) empty.remove()
+        outputQ.insertAdjacentHTML('beforeend', songCard(song))
+    } else if (visible.length === 0 && !outputQ.querySelector('.output__empty')) {
+        outputQ.innerHTML = '<p class="output__empty">No songs match the current filter.</p>'
+    }
+
+    filterCountQ.textContent = isFiltered
+        ? `Showing ${visible.length} of ${plural(rows.length, 'song')}`
+        : ''
     renderSummary()
 })
 
@@ -59,6 +104,9 @@ scrapeButtonQ.addEventListener('click', async () => {
     outputQ.innerHTML = ''
     summaryQ.classList.add('hidden')
     exportStatusQ.textContent = ''
+    filterInputQ.value = ''
+    filterStatusQ.value = 'all'
+    filterCountQ.textContent = ''
     scrapeButtonQ.disabled = true
     stopButtonQ.disabled = false
     stopButtonQ.classList.remove('hidden')
@@ -72,7 +120,7 @@ scrapeButtonQ.addEventListener('click', async () => {
         // finished ones. Re-rendering from them is a single write.
         if (Array.isArray(result.rows)) {
             rows = result.rows
-            outputQ.innerHTML = rows.map(songCard).join('')
+            renderOutput()
             renderSummary()
         }
 
@@ -131,7 +179,24 @@ async function exportAs(format) {
 exportJsonQ.addEventListener('click', () => exportAs('json'))
 exportCsvQ.addEventListener('click', () => exportAs('csv'))
 
-//! Render The Summary
+//! Render The Output And Summary
+function renderOutput() {
+    const status = filterStatusQ.value
+    const query = filterInputQ.value
+    const isFiltered = status !== 'all' || query.trim().length > 0
+    const visible = filterRows(rows, { status, query })
+
+    if (rows.length > 0 && visible.length === 0) {
+        outputQ.innerHTML = '<p class="output__empty">No songs match the current filter.</p>'
+    } else {
+        outputQ.innerHTML = visible.map(songCard).join('')
+    }
+
+    filterCountQ.textContent = isFiltered
+        ? `Showing ${visible.length} of ${plural(rows.length, 'song')}`
+        : ''
+}
+
 function renderSummary() {
     if (rows.length === 0) {
         summaryQ.classList.add('hidden')

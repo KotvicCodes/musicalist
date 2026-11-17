@@ -181,6 +181,85 @@ test('prefers an original recording over equally scoring compilations', () => {
     assert.equal(id, mbid('original'))
 })
 
+test('prefers an original recording over an orphan with no releases', () => {
+    const id = pickRecording([
+        {
+            id: mbid('orphan'),
+            score: 100,
+            'first-release-date': '1970-01-01',
+            releases: []
+        },
+        {
+            id: mbid('studio'),
+            score: 100,
+            'first-release-date': '1975-11-21',
+            releases: [{ 'release-group': releaseGroup() }]
+        }
+    ])
+
+    assert.equal(id, mbid('studio'))
+})
+
+test('prefers an orphan recording over one that only appears on repackagings', () => {
+    const id = pickRecording([
+        {
+            id: mbid('comp-only'),
+            score: 100,
+            'first-release-date': '1970-01-01',
+            releases: [{ 'release-group': releaseGroup({ 'secondary-types': ['Compilation'] }) }]
+        },
+        {
+            id: mbid('orphan-only'),
+            score: 100,
+            'first-release-date': '1975-11-21',
+            releases: []
+        }
+    ])
+
+    assert.equal(id, mbid('orphan-only'))
+})
+
+test('prefers clean studio audio over a video or disambiguated take on a date tie', () => {
+    assert.equal(
+        pickRecording([
+            {
+                id: mbid('music-video'),
+                score: 100,
+                'first-release-date': '1975-11-21',
+                video: true,
+                releases: [{ 'release-group': releaseGroup() }]
+            },
+            {
+                id: mbid('clean-audio'),
+                score: 100,
+                'first-release-date': '1975-11-21',
+                video: false,
+                releases: [{ 'release-group': releaseGroup() }]
+            }
+        ]),
+        mbid('clean-audio')
+    )
+
+    assert.equal(
+        pickRecording([
+            {
+                id: mbid('live-take'),
+                score: 100,
+                'first-release-date': '1975-11-21',
+                disambiguation: 'live',
+                releases: [{ 'release-group': releaseGroup() }]
+            },
+            {
+                id: mbid('studio-take'),
+                score: 100,
+                'first-release-date': '1975-11-21',
+                releases: [{ 'release-group': releaseGroup() }]
+            }
+        ]),
+        mbid('studio-take')
+    )
+})
+
 test('never drops below the top score', () => {
     const id = pickRecording([
         { id: mbid('best'), score: 100, releases: [] },
@@ -685,6 +764,27 @@ test('does not sit out a back off for a run that was stopped', async (t) => {
 
     assert.equal(body, null)
     assert.equal(fetch.calls.length, 1)
+})
+
+test('wakes from a back off sleep as soon as the run is stopped', async (t) => {
+    const controller = new AbortController()
+    const fetch = stubFetch(() => {
+        setTimeout(() => controller.abort(), 20)
+        return response({ error: 'busy' }, { status: 503 })
+    })
+    t.after(fetch.restore)
+
+    const body = await request(
+        'https://musicbrainz.org/ws/2/recording/f6d2c1a4-7b3e-4c58-9a01-2d5e8b7c4a19',
+        controller.signal,
+        {
+            busyWaitMs: 10_000
+        }
+    )
+
+    assert.equal(body, null)
+    assert.equal(fetch.calls.length, 1)
+    assert.ok(Date.now() - fetch.calls[0].at < 1000)
 })
 
 test('does not retry an ordinary failure, which will not clear by waiting', async (t) => {

@@ -333,6 +333,22 @@ test('gives up on a quota rejection as a rate limit, not a bad song', async (t) 
     assert.equal(fetch.calls.length, 3)
 })
 
+test('wakes from a quota back off sleep as soon as the run is stopped', async (t) => {
+    const controller = new AbortController()
+    const fetch = stubFetch(() => {
+        setTimeout(() => controller.abort(), 20)
+        return response({ error: { type: 'Exception', code: 4 } })
+    })
+    t.after(fetch.restore)
+
+    await assert.rejects(
+        () => request('/track/42', { quotaWaitMs: 10_000, signal: controller.signal }),
+        { kind: 'cancelled' }
+    )
+    assert.equal(fetch.calls.length, 1)
+    assert.ok(Date.now() - fetch.calls[0].at < 1000)
+})
+
 test('reports a missing id as nothing rather than an error', async (t) => {
     const fetch = stubFetch(() => response({ error: { type: 'DataException', code: 800 } }))
     t.after(fetch.restore)

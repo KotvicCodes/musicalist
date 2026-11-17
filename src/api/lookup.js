@@ -176,6 +176,9 @@ async function lookupSongs(songs, { onProgress, signal } = {}) {
         let row
         try {
             row = await lookupSong(deezer, query, signal)
+            // The enrichment helpers answer a stop with nothing rather than a
+            // throw, so a song stopped halfway comes back looking complete.
+            if (signal && signal.aborted) break
         } catch (err) {
             // An abort killed the request, so this is not a song that failed on
             // its own account and does not deserve a row saying so.

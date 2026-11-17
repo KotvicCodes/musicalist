@@ -305,6 +305,38 @@ test('a stopped request does not leave a row blaming the song', async (t) => {
     assert.deepEqual(rows, [])
 })
 
+test('a stop that lands during enrichment drops the half-filled song', async (t) => {
+    const controller = new AbortController()
+    const everything = stubEverything({
+        tracks: { 'Bohemian Rhapsody': deezerTrack(), Heroes: deezerTrack({ id: 2 }) }
+    })
+    t.after(everything.restore)
+
+    // Deezer answers, then the run is stopped while MusicBrainz is in flight.
+    // The enrichment helpers swallow the abort and return nothing, so without a
+    // check the song would land with its MusicBrainz and archive fields empty.
+    const answer = globalThis.fetch
+    let reachedMusicBrainz = false
+    globalThis.fetch = async (url, options) => {
+        if (String(url).includes('musicbrainz.org')) {
+            reachedMusicBrainz = true
+            controller.abort()
+            throw new DOMException('This operation was aborted', 'AbortError')
+        }
+        return answer(url, options)
+    }
+
+    const seen = []
+    const rows = await lookupSongs(['Bohemian Rhapsody', 'Heroes'], {
+        signal: controller.signal,
+        onProgress: (row) => seen.push(row)
+    })
+
+    assert.ok(reachedMusicBrainz)
+    assert.deepEqual(rows, [])
+    assert.deepEqual(seen, [])
+})
+
 test('runs to the end when no signal is given at all', async (t) => {
     const fetch = stubEverything({ tracks: { One: { id: 1 }, Two: { id: 2 } } })
     t.after(fetch.restore)

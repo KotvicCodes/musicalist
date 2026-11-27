@@ -92,3 +92,12 @@ typings/
 
 # Electron-Forge
 out/
+
+# Compiled application
+dist/
+
+# Local agent instructions and state
+AGENTS.md
+CLAUDE.md
+.claude/
+.codex/

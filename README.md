@@ -114,13 +114,29 @@ npm install
 npm start
 ```
 
+The application, Forge configuration, build tooling and tests are written in TypeScript.
+`npm start`, `npm run package` and `npm run make` type-check and compile automatically.
+The main process and sandboxed preload compile to CommonJS, while the renderer and
+its local helpers bundle into a browser script. Generated files live in `dist/` and
+are excluded from Git.
+
+Check types, formatting and the standalone build:
+
+```bash
+npm run typecheck
+npm run lint
+npm run build
+```
+
 Run the tests:
 
 ```bash
 npm test
 ```
 
-Tests run on Node's built-in test runner with no extra dependencies. Network calls are stubbed, so the suite needs no connection.
+Tests run on Node's built-in test runner through `tsx`. `npm test` first type-checks
+and builds the application so the renderer and preload tests can exercise the
+generated scripts. Network calls are stubbed, so the suite needs no connection.
 
 Build a package for the platform you are on:
 

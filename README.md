@@ -10,11 +10,13 @@ This project follows [Semantic Versioning](https://semver.org). See the [latest 
 
 Grab the build for your system from the [releases page](https://github.com/KotvicCodes/musicalist/releases/latest).
 
-| System               | Download                        | What to do                                                 |
-| -------------------- | ------------------------------- | ---------------------------------------------------------- |
-| macOS, Apple Silicon | `musicalist-darwin-arm64-*.zip` | Unzip and move Musicalist to Applications                  |
-| Windows              | `*Setup.exe`                    | Run the installer, or take the zip if you want it portable |
-| Linux                | `*.deb` or `*.rpm`              | Install with your package manager, or take the zip         |
+| System                   | Download                        | What to do                                                 |
+| ------------------------ | ------------------------------- | ---------------------------------------------------------- |
+| macOS 13+, Apple Silicon | `musicalist-darwin-arm64-*.zip` | Unzip and move Musicalist to Applications                  |
+| Windows                  | `*Setup.exe`                    | Run the installer, or take the zip if you want it portable |
+| Linux                    | `*.deb` or `*.rpm`              | Install with your package manager, or take the zip         |
+
+Musicalist 1.2.5 requires macOS 13 (Ventura) or later, including when built from source, because it uses Electron 45. For macOS 12 (Monterey), [v1.2.3](https://github.com/KotvicCodes/musicalist/releases/tag/v1.2.3) is the last published release using Electron 43. That older runtime does not receive current Electron security updates; upgrade macOS to use the current builds.
 
 Intel Macs are not built. On an Intel Mac, or any other system without a package above, build it yourself with the steps under [Development](#development).
 
